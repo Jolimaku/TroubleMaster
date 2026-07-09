@@ -1,0 +1,32 @@
+# Decrypted/unpacked game assets. Re-extract with the Dandylion TSAC Modding Tool.
+/Unpack/
+
+# Folder for external references that should not be committed
+/external
+
+# ── Generated reports / exports (regenerable, not consumed by the web tool) ──
+/output/
+/output-kor/
+/data/exports/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── Editor / OS cruft ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ── Claude Code local settings (machine-specific) ────────────────────────────
+.claude/settings.local.json
+
+# NOTE: the generated web data (web/data.js, web/data.kor.js, web/codemap.js) is
+# intentionally tracked — The web tool needs to be able to serve them and has no
+# game install to regenerate from.

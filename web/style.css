@@ -1,0 +1,613 @@
+:root {
+  color-scheme: dark;   /* render native widgets (spinner arrows, select chrome, scrollbars) dark-themed */
+  --bg: #14181f;
+  --bg2: #1c222c;
+  --bg3: #232b37;
+  --line: #2d3744;
+  --fg: #e6ebf2;
+  --muted: #8b97a8;
+  --accent: #e8b24a;
+  --accent2: #5aa9e6;
+  --chip: #2a3340;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+header {
+  padding: 14px 20px 0;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--bg); z-index: 5;
+}
+h1 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
+h1 .sub { color: var(--muted); font-weight: 400; font-size: 15px; margin-left: 8px; }
+.lang-switch { position: absolute; top: 16px; right: 20px; color: var(--muted); font-size: 13px; text-decoration: none; }
+.lang-switch:hover { color: var(--accent); text-decoration: underline; }
+.tabs { display: flex; gap: 4px; }
+.tab {
+  background: none; border: none; color: var(--muted);
+  padding: 8px 16px; font-size: 14px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* sub-tabs (Individual tab: Troubleshooter / Beast / Drone) */
+.subtabs { display: flex; gap: 6px; margin: 0 0 12px; }
+.subtabs[hidden] { display: none; }   /* class rule would otherwise override the hidden attribute */
+.subtab {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--muted);
+  padding: 5px 14px; font-size: 13px; cursor: pointer; border-radius: 999px;
+}
+.subtab:hover { color: var(--fg); }
+.subtab.active { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
+
+.controls {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 20px; position: sticky; top: 71px; background: var(--bg);
+  z-index: 4; border-bottom: 1px solid var(--line);
+}
+.search-wrap { flex: 1; max-width: 480px; position: relative; display: flex; }
+#search {
+  flex: 1; max-width: 480px; background: var(--bg2); border: 1px solid var(--line);
+  color: var(--fg); padding: 8px 12px; border-radius: 6px; font-size: 14px;
+}
+.search-wrap #search { max-width: none; padding-right: 30px; }
+#search:focus { outline: none; border-color: var(--accent2); }
+/* hide the native type=search cancel button in favour of our custom one */
+#search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: none; border: none; background: transparent; color: var(--muted);
+  font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 7px; border-radius: 5px;
+}
+.search-wrap.has-text .search-clear { display: block; }
+.search-clear:hover { color: var(--fg); background: var(--bg3); }
+.filter { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.filter[hidden] { display: none; }   /* the display:flex above would otherwise defeat the hidden attr (OS / Reinforce labels) */
+.filter select {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  padding: 6px 8px; border-radius: 6px;
+}
+.count { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* tracking ("to acquire") list: stars on rows / builder slots + the filter pill */
+.star {
+  cursor: pointer; color: var(--muted); user-select: none; line-height: 1;
+  flex: none; font-weight: 400;
+}
+.star:hover { color: var(--accent); }
+.star.on { color: var(--accent); }
+.row-star { margin-right: 7px; }
+.bld-star { margin-right: 5px; font-size: 12px; }
+.star-filter {
+  display: inline-flex; align-items: center; gap: 5px; font: inherit;
+  background: var(--bg2); border: 1px solid var(--line); color: var(--muted);
+  padding: 6px 10px; border-radius: 6px; cursor: pointer;
+}
+.star-filter[hidden] { display: none; }
+.star-filter:hover { border-color: var(--accent); color: var(--fg); }
+.star-filter.active { border-color: var(--accent); color: var(--accent); background: var(--bg3); }
+.star-filter .star-ico { color: var(--accent); }
+.star-count { font-variant-numeric: tabular-nums; }
+.star-filter.active .star-count { color: var(--accent); }
+
+.view { display: none; padding: 8px 20px 40px; }
+.view.active { display: block; }
+
+/* table */
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600;
+  border-bottom: 1px solid var(--line); cursor: pointer; user-select: none;
+  position: sticky; top: 124px; background: var(--bg);
+  white-space: nowrap;   /* the desc column eats all slack, squeezing others to min-width; without
+                            this, CJK headers (종류 / 코스트 / …) break between glyphs and stack vertically */
+}
+thead th:hover { color: var(--fg); }
+thead th.sorted-asc::after { content: " ▲"; color: var(--accent); }
+thead th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+tbody tr.row { border-bottom: 1px solid var(--line); cursor: pointer; }
+tbody tr.row:hover { background: var(--bg2); }
+tbody td { padding: 8px 10px; vertical-align: top; }
+td.name { font-weight: 600; white-space: nowrap; }   /* keep names on one line; the desc column absorbs slack */
+td.grade, td.src { color: var(--muted); white-space: nowrap; }
+td.cat { white-space: nowrap; font-weight: 600; color: var(--muted); }
+td.cost { color: var(--fg); text-align: center; font-variant-numeric: tabular-nums; }
+td.col-type, td.col-slot, td.col-elem { white-space: nowrap; }   /* same reason: CJK type/slot/element values (공용 / 슈퍼스타 / 화염) would stack otherwise */
+/* in-game board category colours */
+.cat-green,   td.cat.cat-green   { color: #6cc24a; }
+.cat-red,     td.cat.cat-red     { color: #e5594e; }
+.cat-yellow,  td.cat.cat-yellow  { color: #e8b24a; }
+.cat-blue,    td.cat.cat-blue    { color: #5aa9e6; }
+.cat-support, td.cat.cat-support { color: #d6dbe2; }
+td.owner { white-space: nowrap; }
+/* Character column only shows on the Individual / NPC tabs */
+.col-owner { display: none; }
+#mastery-table.show-owner .col-owner { display: table-cell; }
+/* Individual / NPC / Company tabs: drop the empty/not-applicable aux columns */
+#mastery-table.hide-aux .col-aux { display: none; }
+/* Individual sub-tabs: every row shares one Category, so drop that column */
+#mastery-table.hide-cat .col-cat { display: none; }
+/* Drone sub-tab groups by Type via sub-headers, so drop the Type column */
+#mastery-table.hide-type .col-type { display: none; }
+/* per-column filter row: sticks flush under the sortable header (its `top` is set in JS, measured
+   from the header height so it holds in any locale). Cells carry the same col-* classes as the
+   header, so they hide/show with their column. */
+thead tr.col-head th { z-index: 4; }
+thead tr.col-filter th {
+  position: sticky; background: var(--bg); z-index: 3;
+  padding: 4px 8px 6px; border-bottom: 1px solid var(--line);
+  cursor: auto; font-weight: 400;
+}
+thead tr.col-filter th:hover { color: var(--muted); }   /* not sortable — cancel the header hover-brighten */
+.col-filter select, .col-filter input {
+  width: 100%; min-width: 0; box-sizing: border-box; font: inherit; font-size: 12px; font-weight: 400;
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  padding: 4px 6px; border-radius: 5px; user-select: text;   /* thead th sets user-select:none */
+}
+.col-filter input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.col-filter select:focus, .col-filter input:focus { outline: none; border-color: var(--accent2); }
+/* custom × clear on the free-text column filters (mirrors the global search's clear) */
+.colf-wrap { position: relative; display: block; }
+.colf-wrap input { padding-right: 20px; }   /* room for the × */
+.colf-clear {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  display: none; border: none; background: transparent; color: var(--muted);
+  font-size: 15px; line-height: 1; cursor: pointer; padding: 1px 4px; border-radius: 4px;
+}
+.colf-wrap.has-text .colf-clear { display: block; }
+.colf-clear:hover { color: var(--fg); background: var(--bg3); }
+/* inline description column — absorbs leftover width and ellipsises (max-width:0 + width:100%) */
+td.desc-inline {
+  max-width: 0; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+/* detail row */
+tr.mast-section td {
+  background: var(--bg3); color: var(--accent); font-weight: 600;
+  padding: 7px 10px; border-top: 1px solid var(--line); letter-spacing: .02em;
+}
+tr.mast-section:first-child td { border-top: none; }
+.mast-section-n { color: var(--muted); font-weight: 400; margin-left: 8px; }
+.detail .src-note { color: var(--muted); font-size: .9em; margin-top: 4px; }
+.detail .src-form { color: var(--muted); margin-left: 8px; }
+/* species mastery name prefix: the offering form / hand-named group */
+.name-prefix {
+  display: inline-block; background: var(--bg3); color: var(--accent2);
+  font-size: .8em; padding: 1px 6px; border-radius: 4px; margin-right: 4px; vertical-align: middle;
+}
+tr.detail { background: var(--bg2); }
+tr.detail td { padding: 4px 16px 16px; }
+.detail .desc { white-space: pre-wrap; margin: 6px 0 12px; max-width: 760px; }
+/* inline buff reference inside a description — hover shows its effect (nested tooltip) */
+.bufflink { border-bottom: 1px dotted var(--accent); cursor: help; }
+/* inline mastery reference — a flat pill that jumps to that mastery on click, previews its card on
+   hover. Horizontal padding only (no vertical padding/border) so a line carrying one keeps the same
+   height as its neighbours; the tinted background paints behind the glyphs without growing the line. */
+.masterylink {
+  cursor: pointer; color: var(--accent2); background: var(--bg3);
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+}
+.masterylink:hover { color: var(--fg); background: var(--line); }
+/* inline ability reference — jumps to that ability on click, previews its card on hover (same flat
+   pill as .masterylink; used by reinforcement masteries that name the abilities they enhance). */
+.abilitylink {
+  cursor: pointer; color: var(--accent2); background: var(--bg3);
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+}
+.abilitylink:hover { color: var(--fg); background: var(--line); }
+/* buff-group card: each member buff on its own line (name + the core line of its effect) */
+.tip-grpmember { font-size: 12px; line-height: 1.45; margin-top: 3px; }
+.tip-grpname { color: var(--accent); }
+.tip-grpdesc { color: var(--muted); }
+.detail .flavor { color: var(--muted); font-style: italic; margin-bottom: 12px; }
+.detail h4 { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--accent); }
+.srclist { columns: 3; column-gap: 24px; max-width: 900px; }
+.srclist div { break-inside: avoid; color: var(--muted); }
+@media (max-width: 800px) { .srclist { columns: 1; } }
+/* ability detail: stat line + chip lists (granted/modified by, mastery→ability cross-link) */
+.detail .ability-stats { color: var(--muted); margin-bottom: 12px; }
+.detail .chiplist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.detail .ability-link { margin-top: 8px; }
+/* enemy list carries per-mission appearance info (level badge + case colour) */
+.enemy-src { columns: 1; }
+.enemy-src > div { margin-bottom: 8px; }
+.enemy-src .enemy-name { color: var(--fg); font-weight: 600; }
+.enemy-src .missions { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0 0 12px; }
+.enemy-src .mission { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.enemy-src .mission.dialog { font-style: italic; }
+.enemy-src .mission.training { color: var(--accent2); font-size: 12px; }
+.enemy-toggle { cursor: pointer; color: var(--accent2); font-size: 12px; user-select: none; }
+.enemy-toggle::before { content: "▸ "; }
+.enemy-fold.open .enemy-toggle::before { content: "▾ "; }
+.enemy-more { display: none; margin-top: 8px; }
+.enemy-more > div { margin-bottom: 8px; }
+.enemy-fold.open .enemy-more { display: block; }
+/* achievement (feat) + story-mission unlocks: single column, the condition/mission stands out */
+.achievement-src, .story-src { columns: 1; }
+.achievement-src > div, .story-src > div { margin-bottom: 6px; color: var(--fg); }
+.achievement-src .ach-cond { color: var(--fg); }
+.achievement-src .ach-steam { color: var(--accent); font-size: 12px; }
+.lvl-badge {
+  display: inline-block; min-width: 18px; text-align: center; padding: 0 4px;
+  margin-right: 5px; border-radius: 3px; color: #fff; font-weight: 700; font-size: 11px;
+}
+.case-Scenario { background: #c0392b; }  /* red   */
+.case-Ordinary { background: #2d6fb3; }  /* blue  */
+.case-Violent  { background: #8e44ad; }  /* purple */
+
+/* chips */
+.chip {
+  display: inline-block; background: var(--chip); border: 1px solid var(--line);
+  color: var(--fg); padding: 1px 8px; border-radius: 10px; font-size: 12px;
+  margin: 1px 3px 1px 0; cursor: pointer; white-space: nowrap;
+}
+.chip:hover { border-color: var(--accent2); color: var(--accent2); }
+/* hover preview of a mastery set or a mastery */
+.hover-tip {
+  position: absolute; display: none; z-index: 20; max-width: 340px;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; box-shadow: 0 6px 22px rgba(0, 0, 0, .55); pointer-events: none;
+}
+.hover-tip.show { display: block; }
+.tip-name { font-weight: 600; font-size: 14px; }
+.tip-meta { color: var(--muted); font-size: 12px; margin: 1px 0 7px; }
+.tip-comp div { color: var(--fg); font-size: 12px; line-height: 1.5; }
+.tip-desc { white-space: pre-wrap; color: var(--fg); font-size: 12px; line-height: 1.45; }
+.tip-flavor { color: var(--muted); font-style: italic; font-size: 12px; margin-top: 6px; }
+.tip-grants { color: var(--accent2); font-size: 12px; margin-top: 6px; }
+/* inline buff effect(s) inside an ability hover card — the buff a buff-enabling ability triggers */
+.tip-buffeffect { margin-top: 6px; }
+.tip-buffname { color: var(--accent); font-size: 12px; }
+.tip-buffbody { white-space: pre-wrap; color: var(--muted); font-size: 12px; line-height: 1.45; margin-left: 10px; }
+.tip-bonus {
+  white-space: pre-wrap; color: var(--accent); font-size: 12px;
+  border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px;
+}
+
+/* set cards */
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.card h3 { margin: 0 0 4px; font-size: 16px; }
+.card .meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px;
+  background: var(--bg3); margin-left: 6px; }
+.badge.dlc { background: #4a3a1c; color: var(--accent); }
+/* ability "who fields it" badges — the owning character(s) / beast family */
+.owner-badge { display: inline-block; background: var(--bg3); color: var(--accent2);
+  font-size: .78em; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
+  white-space: nowrap; }
+.card .components { margin: 8px 0 12px; }
+.card .bonus { white-space: pre-wrap; color: var(--fg); font-size: 13px;
+  border-top: 1px solid var(--line); padding-top: 10px; }
+/* equipment-set piece-count bonuses */
+.equip-thresholds { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.equip-th { display: flex; gap: 8px; padding: 3px 0; font-size: 13px; }
+.equip-th + .equip-th { border-top: 1px dotted var(--line); }
+.equip-n { flex: none; min-width: 34px; color: var(--accent); font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+.equip-desc { white-space: pre-wrap; color: var(--fg); }
+/* dialogue view */
+.dlg-stage { border-bottom: 1px solid var(--line); }
+.dlg-head { display: flex; align-items: center; gap: 10px; padding: 10px 4px; cursor: pointer; }
+.dlg-head:hover { background: var(--bg2); }
+.dlg-head::before { content: "▸"; color: var(--muted); }
+.dlg-stage.open .dlg-head::before { content: "▾"; }
+.dlg-scenario { font-weight: 600; color: var(--accent); }
+/* side-quest stages lead with the quest name (blue, matching the Quests tab) instead of a
+   gold story-chapter name — a stage has one or the other, never both */
+.dlg-quest { font-weight: 600; color: var(--accent2); }
+/* when a scenario/quest name leads, the location reads as a lighter subtitle after it */
+.dlg-scenario + .dlg-title, .dlg-quest + .dlg-title { font-weight: 400; color: var(--muted); }
+.dlg-scenario + .dlg-title::before, .dlg-quest + .dlg-title::before { content: "· "; }
+.dlg-title { font-weight: 600; }
+.dlg-meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+.dlg-body { display: none; padding: 4px 8px 16px 30px; }
+.dlg-stage.open .dlg-body { display: block; }
+.decision { margin: 0 0 14px; }
+.decision.child { margin: 8px 0 6px; padding-left: 12px; border-left: 2px solid var(--accent); }
+.decision.child .prompt::before { content: "↳ "; color: var(--accent); }
+.decision .prompt { color: var(--accent2); margin-bottom: 5px; }
+.options { list-style: none; margin: 0; padding: 0; }
+.options li { padding: 4px 0 4px 10px; border-left: 2px solid var(--line); margin-bottom: 4px; }
+.options li.grouped { border-left-color: var(--accent2); }
+.opt-text { color: var(--fg); }
+.options li.grouped .opt-text::before { content: "• "; color: var(--muted); }
+/* an option whose direct consequence script folds open from the option row itself */
+.opt-text.foldable { cursor: pointer; user-select: none; }
+.opt-text.foldable::before { content: "▸ "; color: var(--accent2); }
+.options li.grouped .opt-text.foldable::before { content: "▸ "; color: var(--accent2); }
+.options li.open > .opt-text.foldable::before { content: "▾ "; }
+.opt-script { display: none; margin: 4px 0 6px 10px; padding-left: 10px;
+  border-left: 1px solid var(--line); }
+.options li.open > .opt-script { display: block; }
+.conseqs { margin-top: 2px; }
+.conseq { display: inline-block; margin-left: 8px; font-size: 12px; padding: 0 6px;
+  border-radius: 3px; background: var(--bg3); color: var(--muted); }
+.conseq.kind-fight { background: #4a1f1f; color: #e8a0a0; }
+.conseq.kind-join { background: #1f3a4a; color: #9ed0e6; }
+.conseq.kind-third { background: #3a2a4a; color: #c9a8e0; }
+.conseq.kind-reward { background: #3a3320; color: var(--accent); }
+.conseq.kind-mission, .conseq.kind-party { background: #26323f; color: var(--fg); }
+.conseq.kind-buff { background: #2a3a2c; color: #a9d8b0; }
+.conseq.kind-leave { background: #3a3326; color: #d8c39a; }
+.conseq.kind-objective { background: #26323f; color: #9ed0e6; }   /* mission objective change */
+.conseq.kind-objective::before { content: "◎ "; }
+/* a mastery the choice awards — stands out (gold) and links to the mastery's row */
+.conseq.kind-mastery { background: #3a2f12; color: var(--accent); font-weight: 600; }
+.conseq.kind-mastery::before { content: "★ "; }
+.conseq.clickable { cursor: pointer; }
+.conseq.clickable:hover { background: var(--accent); color: #1a1a1a; }
+/* full-script (per-stage event logic) */
+.script-section { margin-top: 6px; }
+.script-toggle { color: var(--accent2); cursor: pointer; font-size: 12px; padding: 4px 0; user-select: none; }
+.script-toggle::before { content: "▸ "; }
+.script-section.open .script-toggle::before { content: "▾ "; }
+.script-body { display: none; margin: 6px 0 6px 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+.script-section.open .script-body { display: block; }
+/* rule actions render the same in the full-script rules and in the av-detail panel */
+.rule, .av-detail, .opt-script { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.rule { margin-bottom: 10px; }
+/* a group of rules sharing a factored-out leading condition */
+.rule-group { margin: 0 0 12px; }
+.rule-group-when { color: var(--accent2); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; margin-bottom: 4px; }
+.rule-group .rule { margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--line); margin-bottom: 6px; }
+.rule-group-when.bucket { color: var(--fg); opacity: .75; margin-left: 14px; margin-top: 2px; }
+.rule-subgroup { margin-left: 14px; }
+.rule-group .rule-group { margin-left: 14px; }
+.rule-name { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.rule .when { color: var(--muted); }
+.do { color: var(--fg); padding-left: 16px; }
+.do::before { content: "→ "; color: var(--muted); }
+.do.has-lines { cursor: pointer; }
+.do.has-lines::after { content: " ▸ lines"; color: var(--accent2); font-size: 11px; }
+.do.has-lines.open::after { content: " ▾ lines"; }
+.dlg-lines { display: none; }
+.dlg-lines.open { display: block; }
+.dlg-line { color: var(--muted); padding-left: 34px; font-style: italic; white-space: normal; }
+.dlg-line.choice-line { color: var(--accent2); font-style: normal; font-weight: 600; }
+.dlg-line.switch-line { color: var(--accent); font-style: normal; }
+.dlg-line.title-line { color: var(--fg); font-style: normal; font-weight: 600; opacity: .85; }
+.dlg-line.objective-line { color: var(--accent2); font-style: normal; }
+/* what makes a decision appear: gray, foldable condition row(s) */
+.appears-via { margin: 2px 0 4px; }
+.av-cond {
+  color: var(--muted); font-size: 12px; cursor: pointer; user-select: none;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.av-cond::before { content: "▸ "; }
+.appears-via.open .av-cond::before { content: "▾ "; }
+.av-detail { display: none; margin: 4px 0 4px 12px; padding-left: 10px; border-left: 1px solid var(--line); }
+.appears-via.open .av-detail { display: block; }
+/* what a choice triggers */
+.opt-triggers { margin: 3px 0 6px 0; }
+.trig-toggle { cursor: pointer; color: var(--accent2); font-size: 12px; user-select: none; }
+.trig-toggle::before { content: "▸ "; }
+.opt-triggers.open .trig-toggle::before { content: "▾ "; }
+.trig-body { display: none; margin: 6px 0 6px 10px; padding-left: 10px; border-left: 1px solid var(--line); }
+.opt-triggers.open .trig-body { display: block; }
+.empty { color: var(--muted); padding: 40px; text-align: center; }
+footer { color: var(--muted); padding: 14px 20px 30px; border-top: 1px solid var(--line); font-size: 12px; }
+mark { background: var(--accent); color: #14181f; border-radius: 2px; }
+
+/* ---------- Board Builder ---------- */
+.builder-builds {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0 0;
+}
+.builder-builds select {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  padding: 6px 10px; border-radius: 6px; font-size: 14px; min-width: 260px; max-width: 420px;
+}
+.builder-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  padding: 12px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px;
+}
+.builder-bar select, .builder-bar input {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  padding: 6px 10px; border-radius: 6px; font-size: 14px;
+}
+.builder-bar input[type="number"] { width: 64px; }
+.builder-broken {
+  display: none; background: #3a1f1f; border: 1px solid #e5594e; color: #f3c0bc;
+  border-radius: 8px; padding: 9px 14px; margin-bottom: 14px; font-size: 13px;
+}
+.builder-broken.show { display: block; }
+.builder-broken strong { color: #e5594e; }
+.builder-main { display: flex; gap: 18px; align-items: flex-start; }
+.builder-board {
+  flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; min-width: 0;
+}
+.bld-col { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 0 0 10px; overflow: hidden; }
+/* beast evolution-mastery pickers, spanning the full board width above the columns */
+.bld-evo-row {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.bld-evo-head { font-weight: 600; color: var(--muted); margin-right: 4px; }
+.bld-evo-pick { display: inline-flex; align-items: center; gap: 6px; }
+.bld-evo-lvl { color: var(--muted); font-size: .9em; }
+/* custom dropdown (so options + the closed trigger can show mastery cards on hover) */
+.bld-bar-csel { display: inline-flex; align-items: center; }
+.bld-bar-csel[hidden] { display: none; }
+.csel { position: relative; display: inline-block; }
+.csel-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 150px; max-width: 230px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 8px; cursor: pointer; font: inherit; text-align: left;
+}
+.csel-trigger:hover, .csel.open .csel-trigger { border-color: var(--accent2); }
+.csel-lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csel-car { color: var(--muted); margin-left: auto; }
+/* the Builds picker holds long "Name · Class — buildname" labels — give it ~50% more room than
+   the other csels (150→225 / 230→345) so it ellipsises less often */
+#bld-list-csel .csel-trigger { min-width: 225px; max-width: 345px; }
+.csel-menu {
+  position: absolute; top: 100%; left: 0; z-index: 50; margin-top: 2px;
+  min-width: 220px; max-height: 320px; overflow-y: auto;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45); padding: 4px;
+}
+.csel-group { font-size: .78em; font-weight: 600; color: var(--muted); padding: 6px 8px 2px; }
+.csel-opt { padding: 4px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.csel-opt:hover { background: var(--bg3); }
+.csel-opt.sel { color: var(--accent); }
+.bld-col-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; border-top: 3px solid currentColor; background: var(--bg3);
+}
+.bld-col-head.clickable { cursor: pointer; }
+.bld-col-head.clickable:hover { filter: brightness(1.25); }
+.bld-col-head.filtered { box-shadow: inset 0 -2px 0 currentColor; }
+.bld-col-head-l { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bld-cat-name { font-weight: 700; color: currentColor; font-size: 15px; }
+/* funnel marks the header as a sidebar filter: always visible but dimmed, brightening on hover / when active */
+.bld-col-funnel { display: inline-flex; opacity: .38; transition: opacity .12s; }
+.bld-col-funnel svg { width: 13px; height: 13px; display: block; }
+.bld-col-head.clickable:hover .bld-col-funnel,
+.bld-col-head.filtered .bld-col-funnel { opacity: 1; }
+.bld-cat-count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+.bld-cat-count.over { color: #e5594e; }
+.bld-slots { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 0; }
+.bld-slot {
+  display: flex; justify-content: space-between; align-items: center;
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 13px;
+}
+.bld-slot.empty { color: var(--muted); font-style: italic; border-style: dashed; justify-content: center; }
+.bld-slot.locked { color: var(--muted); font-style: italic; justify-content: center; opacity: .5; background: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,.03) 5px, rgba(255,255,255,.03) 10px); }
+/* both slot highlights (set-row hover and direct mastery hover) glow in the slot's category colour */
+.bld-slot.set-hi { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
+/* mastery-set panel (6th cell) — violet accent like the in-game panel */
+.bld-setcol { color: #b18cf0; }
+.bld-set-row {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px;
+}
+.bld-set-row:hover { background: var(--bg3); }
+.bld-set-row.addable { cursor: pointer; }
+.bld-set-row.addable:hover { background: var(--bg3); box-shadow: inset 2px 0 0 var(--accent); }
+.bld-set-fold > summary {
+  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  margin: 8px 2px 2px; padding-top: 8px; border-top: 1px solid var(--line);
+  cursor: pointer; list-style-position: inside;
+}
+.bld-set-fold[open] > summary { color: var(--fg); }
+.bld-set-name { color: var(--fg); font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bld-set-icons { display: flex; gap: 5px; flex: none; }
+.bld-setmastery {
+  width: 11px; height: 11px; border: 1.5px solid currentColor; border-radius: 2px;
+  transform: rotate(45deg); cursor: help;   /* colour comes from the cat-* class (or inherited) */
+}
+.bld-setmastery.missing { opacity: .25; }   /* component not yet on the board */
+/* hovering a mastery (on the board or a diamond) lights up its diamonds — fill with a lighter shade of the border */
+.bld-setmastery.mastery-hi { background: color-mix(in srgb, currentColor 85%, white); }
+.bld-setmastery.missing.mastery-hi { opacity: .55; }   /* lift dimmed same-mastery diamonds so the fill reads */
+.bld-slot.filled { background: var(--bg3); cursor: pointer; }
+.bld-slot.fixed { cursor: default; border-color: var(--accent); border-style: dashed; }
+.bld-slot.fixed .bld-slot-name, .bld-slot.fixed .bld-slot-cost { color: var(--accent); }
+.bld-slot.filled:hover { border-color: currentColor; }
+.bld-slot.filled.over { border-color: #e5594e; background: #3a1f1f; }
+.bld-slot-name { color: var(--fg); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bld-slot-cost { color: var(--muted); font-variant-numeric: tabular-nums; padding-left: 8px; }
+/* sidebar */
+.builder-side {
+  width: 320px; flex: none; background: var(--bg2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px; position: sticky; top: 130px;
+  max-height: calc(100vh - 150px); display: flex; flex-direction: column;
+}
+.bld-side-head { display: flex; gap: 6px; margin-bottom: 8px; }
+.bld-side-tab {
+  flex: 1; background: var(--bg3); border: 1px solid var(--line); color: var(--muted);
+  padding: 6px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.bld-side-tab.active { color: var(--accent); border-color: var(--accent); }
+.bld-side-search {
+  background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+  padding: 6px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 8px;
+}
+.bld-side-count { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+.bld-side-count.bld-side-clear { color: var(--accent); cursor: pointer; }
+.bld-side-list { overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.bld-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-left: 3px solid currentColor; border-radius: 5px;
+  padding: 5px 9px; cursor: pointer; font-size: 13px;
+}
+.bld-item:hover { background: var(--bg3); }
+.bld-item-name { color: var(--fg); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bld-item-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+@media (max-width: 1000px) {
+  .builder-main { flex-direction: column; }
+  .builder-side { width: 100%; position: static; max-height: none; }
+}
+
+/* Board Builder — import/export */
+.bld-iobtn {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.bld-iobtn:hover { border-color: var(--accent2); color: var(--accent2); }
+/* download-arrow glyph for the Backup button — a mask so it inherits the button's text colour
+   (incl. the hover shift) and survives the data-i18n textContent swap (a real child node wouldn't) */
+.bld-iobtn-dl::before {
+  content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M11%203h2v7h3l-4%205-4-5h3z'/%3E%3Cpath%20d='M5%2019h14v2H5z'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M11%203h2v7h3l-4%205-4-5h3z'/%3E%3Cpath%20d='M5%2019h14v2H5z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.bld-io { display: none; margin: 0 0 14px; }
+.bld-io.open { display: block; }
+.bld-io-text {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  field-sizing: content;   /* auto-grow to fit pasted/typed multi-line text (graceful no-op where unsupported) */
+  /* floor the resize at the initial one-line height: 1 text line + the 8px×2 padding + 1px×2 border */
+  min-height: calc(1lh + 16px + 2px);
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 12px;
+}
+.bld-io-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.bld-io-sel { flex: 1; min-width: 220px; background: var(--bg2); border: 1px solid var(--line); color: var(--fg); padding: 6px 10px; border-radius: 6px; }
+.bld-io-file { color: var(--muted); font-size: 12px; }
+.bld-io-code {
+  flex: 1; min-width: 240px; background: var(--bg2); border: 1px solid var(--line);
+  color: var(--fg); padding: 6px 10px; border-radius: 6px; font-family: monospace;
+  font-size: 12px; letter-spacing: 0.5px;
+}
+.bld-io-msg { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.bld-io-msg.err { color: #e5594e; }
+.bld-io-msg.warn { color: var(--accent); }
+.bld-io-partial { margin-left: 8px; }   /* inline "import the recognized" confirm for a partial code */
+
+/* ---- Quests: per-NPC subheadings + a responsive grid of quest cards ---- */
+.quest-npc { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 10px;
+  font-size: 18px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.quest-npc:first-child { margin-top: 4px; }
+.quest-npc-count { color: var(--muted); font-size: 13px; font-weight: 400; }
+.quest-npc-count::before { content: "("; }
+.quest-npc-count::after { content: ")"; }
+.quest-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.quest-card { display: flex; flex-direction: column; gap: 6px; font-size: 13px; padding: 12px 14px; }
+.quest-head { display: flex; align-items: baseline; gap: 7px; }
+.quest-idx { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; flex: none; }
+.quest-title { font-weight: 700; font-size: 14px; flex: 1; }
+.quest-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 12px; }
+.quest-meta > span:not(.badge) + span:not(.badge)::before { content: "· "; }
+.quest-unlock { font-size: 12px; color: var(--muted); }
+.quest-unlock-lbl { color: var(--muted); }
+.quest-loc { color: var(--accent2); font-size: 12px; }
+.quest-obj { color: var(--fg); }
+.quest-drop { color: var(--muted); font-size: 12px; }
+.quest-req { display: flex; gap: 6px; align-items: baseline; font-size: 12px;
+  color: var(--accent); background: #2c2415; border-radius: 5px; padding: 4px 8px; }
+.quest-req-ico { flex: none; }
+.quest-reward-h { color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; margin-top: 4px; }
+.quest-rewards { margin: 0; padding-left: 18px; }
+.quest-rewards li { padding: 1px 0; }
+.quest-friend { color: var(--accent); font-weight: 600; font-size: 12px; margin-top: 2px; }
+.quest-unlock-reward { color: #6fca9a; font-weight: 600; font-size: 12px; margin-top: 2px; }

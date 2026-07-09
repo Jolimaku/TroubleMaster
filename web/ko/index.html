@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TroubleMaster</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header>
+    <a class="lang-switch" href="../index.html" hreflang="en" lang="en">English</a>
+    <h1>TroubleMaster <span class="sub" data-i18n="header.subtitle">A build planner &amp; reference for TROUBLESHOOTER: Abandoned Children</span></h1>
+    <nav class="tabs">
+      <button class="tab active" data-view="masteries" data-group="normal" data-i18n="tab.masteries">Masteries</button>
+      <button class="tab" data-view="masteries" data-group="individual" data-i18n="tab.individual">Individual</button>
+      <button class="tab" data-view="masteries" data-group="npc" data-i18n="tab.npc">NPC / Promotion</button>
+      <button class="tab" data-view="masteries" data-group="company" data-i18n="tab.company">Company</button>
+      <button class="tab" data-view="masteries" data-group="module" data-i18n="tab.modules">Modules</button>
+      <button class="tab" data-view="masteries" data-group="class" data-i18n="tab.classTraits">Class Traits</button>
+      <button class="tab" data-view="masteries" data-group="misc" data-i18n="tab.misc">Misc</button>
+      <button class="tab" data-view="sets" data-i18n="tab.sets">Mastery Sets</button>
+      <button class="tab" data-view="equipsets" data-i18n="tab.equipsets">Equipment Sets</button>
+      <button class="tab" data-view="abilities" data-i18n="tab.abilities">Abilities</button>
+      <button class="tab" data-view="dialogue" data-i18n="tab.dialogue">Dialogue</button>
+      <button class="tab" data-view="quests" data-i18n="tab.quests">Quests</button>
+      <button class="tab" data-view="builder" data-i18n="tab.builder">Board Builder</button>
+    </nav>
+  </header>
+
+  <div class="controls">
+    <input type="search" id="search" placeholder="Search…" data-i18n-ph="search.placeholder" autocomplete="off" spellcheck="false">
+    <label class="filter" id="type-filter-label"><span data-i18n="filter.type">Type</span>
+      <select id="type-filter"><option value="" data-i18n="filter.all">All</option></select>
+    </label>
+    <label class="filter" id="cat-filter-label"><span data-i18n="filter.category">Category</span>
+      <select id="cat-filter"><option value="" data-i18n="filter.all">All</option></select>
+    </label>
+    <button type="button" id="star-filter" class="star-filter" hidden data-i18n-title="filter.starredTitle" title="Show only starred masteries">
+      <span class="star-ico">★</span><span data-i18n="filter.starred">Starred</span><span id="star-count" class="star-count"></span>
+    </button>
+    <span id="count" class="count"></span>
+  </div>
+
+  <!-- Masteries: searchable/sortable table -->
+  <main id="view-masteries" class="view active">
+    <div class="subtabs" id="indiv-subtabs" hidden>
+      <button class="subtab active" data-cat="Individual" data-i18n="subtab.troubleshooter">Troubleshooter</button>
+      <button class="subtab" data-cat="Beasts" data-i18n="subtab.beast">Beast</button>
+      <button class="subtab" data-cat="Machine" data-i18n="subtab.machine">Drone / Machine</button>
+    </div>
+    <table id="mastery-table">
+      <thead>
+        <tr class="col-head">
+          <th data-sort="name" data-i18n="th.name">Name</th>
+          <th class="col-desc" data-i18n="th.description">Description</th>
+          <th class="col-owner" data-sort="owner" data-i18n="th.character">Character</th>
+          <th class="col-type" data-sort="type" data-i18n="th.type">Type</th>
+          <th class="col-cat" data-sort="category" data-i18n="th.category">Category</th>
+          <th class="col-aux" data-sort="cost" title="Training-point / Output cost" data-i18n="th.cost" data-i18n-title="th.cost.title">Cost</th>
+          <th class="col-aux" data-sort="sets" data-i18n="th.sets">Sets</th>
+          <th class="col-aux" data-sort="sourceCount" data-i18n="th.sources">Sources</th>
+        </tr>
+      </thead>
+      <tbody id="mastery-body"></tbody>
+    </table>
+  </main>
+
+  <!-- Mastery Sets: searchable cards -->
+  <main id="view-sets" class="view">
+    <div id="set-grid" class="grid"></div>
+  </main>
+
+  <!-- Equipment Sets: per-set piece-count bonuses -->
+  <main id="view-equipsets" class="view">
+    <div id="equipset-grid" class="grid"></div>
+  </main>
+
+  <!-- Abilities: searchable/sortable reference of every named ability -->
+  <main id="view-abilities" class="view">
+    <table id="ability-table">
+      <thead>
+        <tr class="col-head">
+          <th data-sort="name" data-i18n="th.name">Name</th>
+          <th data-sort="slot" data-i18n="th.slot">Slot</th>
+          <th data-sort="type" data-i18n="th.type">Type</th>
+          <th data-sort="element" data-i18n="th.element">Element</th>
+          <th data-sort="cost" title="Action cost" data-i18n="th.apCost" data-i18n-title="th.apCost.title">Cost</th>
+          <th data-sort="cooldown" title="Cooldown (turns)" data-i18n="th.cooldown" data-i18n-title="th.cooldown.title">CD</th>
+          <th data-sort="castDelay" title="Cast delay" data-i18n="th.cast" data-i18n-title="th.cast.title">Cast</th>
+          <th class="col-desc" data-i18n="th.description">Description</th>
+        </tr>
+      </thead>
+      <tbody id="ability-body"></tbody>
+    </table>
+  </main>
+
+  <!-- Dialogue: stages with branching choices and their consequences -->
+  <main id="view-dialogue" class="view">
+    <div id="dialogue-list"></div>
+  </main>
+
+  <!-- Quests: Shooter Street NPC request chains, grouped by NPC -->
+  <main id="view-quests" class="view">
+    <div id="quests-list"></div>
+  </main>
+
+  <!-- Board Builder: assemble a character's mastery board -->
+  <main id="view-builder" class="view">
+    <div id="builder-builds" class="builder-builds">
+      <label class="filter"><span data-i18n="bld.builds">Builds</span> <span id="bld-list-csel" class="bld-bar-csel"></span></label>
+      <button id="bld-new" class="bld-iobtn" title="Start a new empty build" data-i18n="bld.new" data-i18n-title="bld.new.title">+ New</button>
+      <button id="bld-import" class="bld-iobtn" title="Import a build (share code/link) or restore a backup" data-i18n="bld.import" data-i18n-title="bld.import.title">Import</button>
+      <button id="bld-exportall" class="bld-iobtn bld-iobtn-dl" title="Download all your builds (and starred masteries) as a backup file" data-i18n="bld.exportall" data-i18n-title="bld.exportall.title">Backup</button>
+    </div>
+    <div id="builder-bar" class="builder-bar">
+      <label class="filter"><span data-i18n="bld.character">Character</span> <span id="bld-pc-csel" class="bld-bar-csel"></span></label>
+      <label class="filter" id="bld-job-label"><span id="bld-job-labeltext">Class</span> <span id="bld-job-csel" class="bld-bar-csel"></span></label>
+      <label class="filter" id="bld-os-label" hidden><span data-i18n="bld.os">OS</span> <span id="bld-os-csel" class="bld-bar-csel"></span></label>
+      <label class="filter" id="bld-reinf-label" hidden><span data-i18n="bld.reinforce">Reinforce</span> <span id="bld-reinf-csel" class="bld-bar-csel"></span></label>
+      <label class="filter"><span data-i18n="bld.level">Level</span> <input type="number" id="bld-level" min="1" max="99" value="1"></label>
+      <button id="bld-dup" class="bld-iobtn" title="Duplicate this build" data-i18n="bld.duplicate" data-i18n-title="bld.duplicate.title">Duplicate</button>
+      <button id="bld-rename" class="bld-iobtn" title="Rename this build" data-i18n="bld.rename" data-i18n-title="bld.rename.title">Rename</button>
+      <button id="bld-delete" class="bld-iobtn" title="Delete this build" data-i18n="bld.delete" data-i18n-title="bld.delete.title">Delete</button>
+      <button id="bld-export" class="bld-iobtn" title="Share this build — in-game code + link" data-i18n="bld.export" data-i18n-title="bld.export.title">Export</button>
+      <span id="bld-summary" class="count"></span>
+    </div>
+    <div id="bld-io" class="bld-io"></div>
+    <div id="builder-broken" class="builder-broken"></div>
+    <div id="builder-main" class="builder-main">
+      <div id="builder-board" class="builder-board"></div>
+      <aside id="builder-side" class="builder-side"></aside>
+    </div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <!-- UI strings + the shell-localization sweep load before the large data file so the chrome
+       is already translated at first paint (no flash of English); app.js does the dynamic strings -->
+  <script src="../ui.kor.js"></script>
+  <script src="../i18n.js"></script>
+  <script src="../data.kor.js"></script>
+  <script src="../codemap.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>

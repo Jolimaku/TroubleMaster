@@ -1,0 +1,72 @@
+{
+  "_note": "Hand-named groups of beast forms. A species evolution-mastery offered by exactly one of these form-sets is labelled with the group name (prefixed before the mastery). Single-form masteries use the form name instead. Edit freely; keys starting with _ are ignored.",
+  "Adolescent Ranged Draki": [
+    "Mon_Beast_Dragon_Black2",
+    "Mon_Beast_Dragon_Dot2",
+    "Mon_Beast_Dragon_Earth2",
+    "Mon_Beast_Dragon_Flame2",
+    "Mon_Beast_Dragon_Frost2",
+    "Mon_Beast_Dragon_Gold2",
+    "Mon_Beast_Dragon_Lightning2",
+    "Mon_Beast_Dragon_Water2",
+    "Mon_Beast_Dragon_White2"
+  ],
+  "Melee Draki": [
+    "Mon_Beast_Dragon_Black2_Ground",
+    "Mon_Beast_Dragon_Black3_Ground",
+    "Mon_Beast_Dragon_Dot2_Ground",
+    "Mon_Beast_Dragon_Dot3_Ground",
+    "Mon_Beast_Dragon_Earth2_Ground",
+    "Mon_Beast_Dragon_Earth3_Ground",
+    "Mon_Beast_Dragon_Flame2_Ground",
+    "Mon_Beast_Dragon_Flame3_Ground",
+    "Mon_Beast_Dragon_Frost2_Ground",
+    "Mon_Beast_Dragon_Frost3_Ground",
+    "Mon_Beast_Dragon_Gold2_Ground",
+    "Mon_Beast_Dragon_Gold3_Ground",
+    "Mon_Beast_Dragon_Lightning2_Ground",
+    "Mon_Beast_Dragon_Lightning3_Ground",
+    "Mon_Beast_Dragon_Water2_Ground",
+    "Mon_Beast_Dragon_Water3_Ground",
+    "Mon_Beast_Dragon_White2_Ground",
+    "Mon_Beast_Dragon_White3_Ground"
+  ],
+  "Mature Crabmit": [
+    "Mon_Beast_Crammy_Base3",
+    "Mon_Beast_Crammy_Black3",
+    "Mon_Beast_Crammy_Earth3",
+    "Mon_Beast_Crammy_Fire3",
+    "Mon_Beast_Crammy_FireBlue",
+    "Mon_Beast_Crammy_Ice3",
+    "Mon_Beast_Crammy_Magma",
+    "Mon_Beast_Crammy_Mutant",
+    "Mon_Beast_Crammy_Pascal",
+    "Mon_Beast_Crammy_Pascal_Boss",
+    "Mon_Beast_Crammy_Poison3",
+    "Mon_Beast_Crammy_Snow",
+    "Mon_Beast_Crammy_Tree",
+    "Mon_Beast_Crammy_White3"
+  ],
+  "Golden Beasts": [
+    "Mon_Beast_Bat_Gold",
+    "Mon_Beast_Crammy_Pascal",
+    "Mon_Beast_Crammy_Pascal_Boss",
+    "Mon_Beast_Dragon_Gold2",
+    "Mon_Beast_Dragon_Gold2_Ground",
+    "Mon_Beast_Dragon_Gold3",
+    "Mon_Beast_Dragon_Gold3_Ground",
+    "Mon_Beast_Frog_Gold",
+    "Mon_Beast_Tima_Yellow"
+  ],
+  "Fragrant Beasts": [
+    "Mon_Beast_Bat_Pascal_Boss",
+    "Mon_Beast_Dragon_White",
+    "Mon_Beast_Dragon_White2",
+    "Mon_Beast_Dragon_White2_Ground",
+    "Mon_Beast_Dragon_White3",
+    "Mon_Beast_Dragon_White3_Ground",
+    "Mon_Beast_Frog_Pascal",
+    "Mon_Beast_Frog_White",
+    "Mon_Beast_Spider_BlackWidow4"
+  ]
+}

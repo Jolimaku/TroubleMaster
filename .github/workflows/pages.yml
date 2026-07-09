@@ -1,0 +1,58 @@
+name: Deploy web/ to GitHub Pages
+
+# Publishes the static application in web/ (English at /, Korean at /ko/).
+# The localized page shells are *derived* from web/index.html by gen_pages.py, so
+# we regenerate them in CI to guarantee they never drift from the canonical shell.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'gen_pages.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Allow one concurrent deployment; let an in-progress run finish so a live deploy
+# isn't cancelled mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+# Least-privilege token: read the repo, write the Pages deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # Regenerate web/ko/index.html (and any other localized shell) from web/index.html.
+      # Pure-stdlib script; nothing to install.
+      - name: Generate localized page shells
+        run: python gen_pages.py
+
+      - uses: actions/configure-pages@v5
+
+      # Upload only the static site directory, not the whole repo.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

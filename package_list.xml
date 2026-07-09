@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What PLDataPacker (TSAC Modding Tool) unpacks out of the game's encrypted Package/ for this
+     project. Ours, not the tool's — a trim of the shipped package_list_mod.xml down to the data we
+     use, dropping its CEGUI UI datafiles. The build reads xml/ + stage/; script/ is kept as
+     reverse-engineering reference (shared_job.lua, shared_tooltip.lua, … cited across the code and
+     DATAMINING.md). Driven by unpack.sh / unpack.bat. -->
+<package>
+	<target path="Package" encrypt_path="true">
+		<directory path="script/server" method="encrypted_zip" recursive="true" target_extension="lua" collapse_subpath="false"/>
+		<directory path="script/shared" method="encrypted_zip" recursive="true" target_extension="lua" collapse_subpath="false"/>
+		<directory path="script/client" method="encrypted_zip" recursive="true" target_extension="lua" collapse_subpath="false"/>
+		<directory path="xml" method="encrypted_zip" recursive="true" target_extension="xml" collapse_subpath="false"/>
+		<directory path="stage" method="encrypted_zip" recursive="true" target_extension="stage" collapse_subpath="false"/>
+	</target>
+</package>
