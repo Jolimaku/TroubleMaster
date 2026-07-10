@@ -155,7 +155,11 @@ Tabs:
 - **Dialogue** — the story stages that have branching choices, listed in level order with a
   case-coloured level badge (Raid/Common combat-only stages are excluded). Expand a stage to see
   each **decision** — its prompt and options — with each option's consequence tagged (fight /
-  join / leave / third-party / buff / reward / mission win-fail / grants mastery / timer).
+  join / leave / third-party / buff / reward / mission win-fail / grants mastery / opens mastery
+  for research / timer). A `○ Opens X for research` badge marks a mutually-exclusive grant group:
+  the choice awards one member but opens the rest for crafting (see
+  [`DATAMINING.md` → Opened for research](DATAMINING.md#data-model-notes); the awarding Story
+  source on the Masteries tab carries a matching "still opened…" note).
   Multi-step conversations **chain**: a follow-up decision nests under the option that leads to
   it, and each option can fold open to the scripted rules it triggers. Every stage also has a
   collapsible **Full script** — its trigger graph rendered as readable pseudo-code, with spoken

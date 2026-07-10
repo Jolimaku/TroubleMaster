@@ -313,10 +313,14 @@ def _trigger_choice_keys(tr, choice_text, choice_vars, producers):
     return [(cv, v) for cv, v in chosen.items() if (cv, v) in choice_text]
 
 
-def _gated_consequences(stage_root, namer, dic, grants=None):
+def _gated_consequences(stage_root, namer, dic, grants=None, opens_entry=None):
     """Map (variable, value) -> [(category, text)] from variable-gated triggers.
     `grants` ({MissionDirect Key -> set(mastery id)}, from _direct_mastery_grants) lets a
-    trigger that plays a mastery-granting scene surface as a 'mastery' consequence."""
+    trigger that plays a mastery-granting scene surface as a 'mastery' consequence.
+    `opens_entry` (this stage's parse_mission_opens record) adds an 'opened' consequence beside
+    each grant — the branch's other group members, which become craftable on that choice without a
+    copy. Only applied when the mission's branches are gated purely on dialogue-choice variables
+    (branch_vars ⊆ choice_vars); outcome-gated missions (Sky-wind park) are left to their own tier."""
     # countdown timers a choice can switch on — survival (hold-out) vs deadline (time-up loses)
     timers = {d.get("Key"): (d.get("LimitTime"), _txt(dic, d.get("Message") or ""))
               for d in stage_root.iter("Dashboard") if d.get("Type") == "TimeLimiter"}
@@ -324,6 +328,9 @@ def _gated_consequences(stage_root, namer, dic, grants=None):
     # choice info for re-keying mastery grants to the *correct* choice (see _trigger_choice_keys)
     choice_text, choice_vars = _choice_setters(stage_root, dic)
     producers = _choice_var_producers(stage_root, choice_vars) if grants else {}
+    # opened-for-research companions, but only for choice-gated missions (see docstring)
+    companions = (opens_entry["companions"]
+                  if opens_entry and opens_entry["branch_vars"] <= choice_vars else {})
     # objective-progress variables: a variable a trigger sets *while gated on an objective event* is
     # itself an objective flag (e.g. Road_111 sets Win=1 only when all fences are repaired / the team
     # retreats). A Win/Fail gated on one is the objective being met, not the choice — so it's not
@@ -379,6 +386,21 @@ def _gated_consequences(stage_root, namer, dic, grants=None):
         if mastery_descs:
             for key in _trigger_choice_keys(t, choice_text, choice_vars, producers):
                 out.setdefault(key, []).extend(mastery_descs)
+    # opened-for-research companions, added per choice once every grant is placed: the choice that
+    # awards a group member opens the *other* members. Suppress any companion already granted under
+    # the same choice — some stages credit two group members to one option (Hansol St's Heixing pick),
+    # where "opens X" beside "grants X" would be redundant/misleading.
+    if companions:
+        for descs in out.values():
+            granted = {d[2] for d in descs if d[0] == "mastery" and len(d) > 2}
+            shown = set()
+            for gmid in sorted(granted):
+                for cid in sorted(companions.get(gmid, ())):
+                    if cid in granted or cid in shown:
+                        continue
+                    shown.add(cid)
+                    ct = _mastery_title(dic, cid)
+                    descs.append(("opened", _L(dic, f"Opens {ct} for research", f"{ct} 연구 해금"), cid))
     return out
 
 
@@ -1384,7 +1406,82 @@ def mastery_grants(xml_dir, stage_dir, dic):
     return out
 
 
-def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
+def parse_mission_opens(lua_path):
+    """The 'opened for research' channel, parsed from `script/server/missionResult_Custom.lua`.
+    Each `MissionResult_Custom_<Stage>` handler awards one mastery per branch (`dc:AcquireMastery`)
+    and *opens the branch's other group members for research* — `dc:UpdateCompanyProperty(company,
+    'Technique/<id>/Opened', true)` — i.e. craftable, but without handing over a copy. This is the
+    only place these opens live (the `.stage` carries just the `MasteryAcquired` grant marker), so
+    it's read straight from the Lua. In every case the opened masteries form a mutually-exclusive
+    grant group ("your choice awards one, the rest become craftable"). Returns {stage_base: {
+        'opened':      set(mid),                       # every mastery the mission opens
+        'companions':  {granted_mid: set(opened_mid)}, # per branch: opens to show beside a grant
+        'branch_vars': set(stage-variable name),       # the stage vars gating this mission's branches
+    }}. Obfuscated string literals (all rendered as 'l') are skipped."""
+    try:
+        with open(lua_path, encoding="utf-8", errors="replace") as fh:
+            txt = fh.read()
+    except OSError:
+        return {}
+    out = {}
+    # split into `function MissionResult_Custom_<Name>( … ) <body>` chunks
+    parts = re.split(r"\nfunction (MissionResult_Custom_\w+)", txt)
+    for i in range(1, len(parts), 2):
+        stage, body = parts[i][len("MissionResult_Custom_"):], parts[i + 1]
+        if "/Opened'" not in body:
+            continue
+        # branch conditions test `missionValue_X`, each aliased from a stage variable; keep only the
+        # ones actually sourced that way (drops locals like tutorialProgress / company.* checks) so
+        # branch_vars ⊆ choice_vars cleanly separates choice-gated missions from outcome-gated ones
+        # (Sky-wind park branches on battle outcome — Sion_Escape/…, not a dialogue choice).
+        stage_vars = set(re.findall(r"GetStageVariable\(mission,\s*'(\w+)'\)", body))
+        branch_vars = set(re.findall(r"missionValue_(\w+)\s*==", body)) & stage_vars
+        # walk statements, grouping the consecutive Acquire/Open calls that sit inside one branch
+        # block (delimited by if/elseif/else/end) — the grant and the opens it pairs with
+        companions, opened = {}, set()
+        grp_grant, grp_open = [], []
+
+        def flush():
+            for m in grp_grant:
+                companions.setdefault(m, set()).update(grp_open)
+            opened.update(grp_open)
+
+        for line in body.splitlines():
+            s = line.strip()
+            if re.match(r"(if|elseif|else|end)\b", s):
+                flush()
+                grp_grant, grp_open = [], []
+            mg = re.search(r"AcquireMastery\(company,\s*'(\w+)'", s)
+            if mg and mg.group(1) != "l":
+                grp_grant.append(mg.group(1))
+            mo = re.search(r"Technique/(\w+)/Opened'\s*,\s*true", s)
+            if mo and mo.group(1) != "l":
+                grp_open.append(mo.group(1))
+        flush()
+        if opened:
+            out[stage] = {"opened": opened, "companions": companions, "branch_vars": branch_vars}
+    return out
+
+
+def mastery_opens(mission_opens, xml_dir, dic):
+    """{mastery id -> set(mission title)}: masteries a story mission *opens* for research (from
+    parse_mission_opens), joined to the mission index for the display title — the same min-level
+    resolution mastery_grants uses. Powers the 'still opened…' note on the Masteries tab."""
+    if not mission_opens:
+        return {}
+    mission_info, stage_to_missions = build_mission_index(xml_dir, dic)
+    out = {}
+    for stage, info in mission_opens.items():
+        missions = stage_to_missions.get(f"{stage.lower()}.stage")
+        if not missions:
+            continue
+        rep = min((mission_info[m] for m in missions), key=lambda mi: (mi["level"] or 999))
+        for mid in info["opened"]:
+            out.setdefault(mid, set()).add(rep["title"])
+    return out
+
+
+def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None, mission_opens=None):
     """Return a list of stage dialogue records — stages with a real decision, plus every
        story-scripted stage (Scenario or Quest case) even when it has no surfaced choice, for its
        full-script rendering. Each: {stage, title, level, case, decisions:[{prompt,
@@ -1394,6 +1491,7 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
     """
     quest_names = quest_names or {}
     mission_info, stage_to_missions = build_mission_index(xml_dir, dic)
+    opens_by_stage = {k.lower(): v for k, v in (mission_opens or {}).items()}
     records = []
 
     for f in glob.glob(os.path.join(stage_dir, "*.stage")):
@@ -1421,7 +1519,8 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
 
         namer = _unit_namer(r, monster_name)
         grants = _direct_mastery_grants(r)        # mastery-awarding scenes (for choice consequences)
-        gated = _gated_consequences(r, namer, dic, grants)
+        opens_entry = opens_by_stage.get(os.path.basename(f)[:-len(".stage")].lower())
+        gated = _gated_consequences(r, namer, dic, grants, opens_entry)
         # a choice's own consequences come only from the variables it *selects* on — not the
         # progression counters it also nudges (e.g. every Sky-wind character pick sets EventID=2,
         # which gates dozens of unrelated triggers; crediting each pick with all of them floods

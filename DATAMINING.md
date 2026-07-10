@@ -255,6 +255,37 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     above), so this closes the non-stage grant channel. Place labels are authored
     (`OFFICE_GRANT_FILES`, en/kor — `알버스의 방` matches the `StoryOfficeAlbus` achievement). Only
     Yearning + FineTuning were otherwise sourceless; the other 6 are also enemy-learnable.
+  - **Opened for research (mutual-open groups)** — a story mission's dialogue choice awards **one**
+    mastery of a group but **opens the whole group for research** regardless, so the others are
+    craftable even though you weren't handed a copy. The opens live **only** in
+    `script/server/missionResult_Custom.lua` (the `.stage` carries just the `MasteryAcquired` grant
+    marker): each `MissionResult_Custom_<Stage>` handler branches on the choice, calling
+    `dc:AcquireMastery(company,'X',1)` for the awarded one and
+    `dc:UpdateCompanyProperty(company,'Technique/Y/Opened',true)` for the rest (`dialog_map.parse_mission_opens`
+    parses these per branch → `{granted → opened-companions}` + the union `opened` set + the gating
+    `branch_vars`). **Key finding:** across the game *every* opened mastery is also **granted by the
+    same mission on another branch** — there are **no** purely-opened masteries; "opened" precisely
+    marks the losing members of an either/or grant group. **6 EP1 story missions:** Firefly Park
+    (two either/or pairs — PositiveMind↔Ambush, Patience↔PangOfConscience; Deftness is always
+    granted, never opened), Silverlining (Alacrity/HighSpeed/Supporter), Pugo Street
+    (Challenger/Consideration), Stop and Look Back (ForthrightStatement/GraciousRefusal/Frankness),
+    Hansol Street (Wanderer/Breakthrough), Sky-wind park (Hysterie/TacticalRetreat +
+    HeroResponsibility/HeroDontGiveUp; Waiting & ColdRefusal are granted-only, never opened).
+    - **Two surfaces.** (1) *Masteries tab* — the awarding **Story** source is flagged
+      `opened:true` (via `mastery_opens`, matched on mission title), rendered with a "(still opened
+      for research even if not awarded)" note. Applies to **all 6** missions. (2) *Dialogue tab* —
+      an `○ Opens X for research` consequence beside the `★ Grants` on each choice (`_gated_consequences`
+      rides the existing grant attribution: the choice that grants a member opens its companions).
+    - **Choice-gated vs outcome-gated.** The Dialogue-tab opens are emitted **only when the mission's
+      `branch_vars ⊆ choice_vars`** — i.e. the group is decided by a dialogue menu. **Sky-wind park**
+      is the exception: its groups hinge on **battle outcome** (`Sion_Allelimination`/`Sion_Escape`
+      = wipe-vs-flee, `Irene_Win` = rescue-vs-fall), not a `<Choice>`, so it's left out of the
+      Dialogue tab here (still gets the Masteries-tab note) — a nested "outcome" tier under the
+      character pick is the planned Phase 2. **Silverlining** likewise surfaces no `<Choice>`
+      (`SelectionPlayType` isn't choice-set) so it too is Masteries-tab-only. A **post-pass**
+      suppresses `Opens X` for any companion already `Grants X` under the *same* choice — **Hansol
+      Street** credits both team masteries to the one "Heixing" option (a pre-existing grant-attribution
+      quirk), where an opens-line would be redundant.
 - **Available from the start** (`technique_initial`, `initial:true`): a mastery whose `Technique.xml`
   entry is `Opened="true"` is pre-researched — usable from the start with no enemy-analysis/research.
   **~30** such (Learning, the `Resistance1` set, the basic drone `Module_*`, the `TrainingManual`s);

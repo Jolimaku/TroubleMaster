@@ -742,11 +742,16 @@
       const wrap = el("div.srclist.story-src");
       m.story.forEach(s => {
         const where = s.scenario ? s.scenario + " · " + s.mission : s.mission;   // "Ch4 Scent… · Sky-wind park"
-        wrap.append(el("div", { text: s.tutorial
+        const div = el("div", { text: s.tutorial
           ? tf("detail.storyTutorial", "{mission} (tutorial)", { mission: where })
           : s.choice
           ? tf("detail.storyChoice", "{mission} — choose “{choice}”", { mission: where, choice: s.choice })
-          : tf("detail.storyReward", "{mission} (mission reward)", { mission: where }) }));
+          : tf("detail.storyReward", "{mission} (mission reward)", { mission: where }) });
+        // opened-for-research group: the choice picks which you're awarded, but all become craftable
+        if (s.opened)
+          div.append(el("span.story-opened", { text: " " +
+            t("detail.storyOpened", "(still opened for research even if not awarded)") }));
+        wrap.append(div);
       });
       td.append(heading(t("detail.story", "Unlocked by a story mission")), wrap);
     }
@@ -1363,14 +1368,18 @@
       const cons = g.opts[0].consequences;
       if (cons.length)                            // extracted top-level consequences stay above
         li.append(el("div.conseqs", {}, cons.map(c => {
-          const known = c.kind === "mastery" && c.mastery && masteryById[c.mastery];
-          // the data text ("Grants X") is English (dialogue text is English-deferred); when we
-          // know the mastery, relabel it localized from its (localized) name + a clickable link
-          const span = el("span.conseq", { class: "kind-" + c.kind,
-            text: known ? tf("dlg.grants", "Grants {name}", { name: masteryById[c.mastery].name }) : c.text });
-          if (known) {
+          // "mastery" grants a copy, "opened" only unlocks it for research — both link to the row
+          const linked = (c.kind === "mastery" || c.kind === "opened") && c.mastery && masteryById[c.mastery];
+          // the data text ("Grants X" / "Opens X …") is English (dialogue text is English-deferred);
+          // when we know the mastery, relabel it localized from its (localized) name + a clickable link
+          const label = !linked ? c.text
+            : c.kind === "opened"
+            ? tf("dlg.opens", "Opens {name} for research", { name: masteryById[c.mastery].name })
+            : tf("dlg.grants", "Grants {name}", { name: masteryById[c.mastery].name });
+          const span = el("span.conseq", { class: "kind-" + c.kind, text: label });
+          if (linked) {
             const gm = masteryById[c.mastery];
-            span.classList.add("clickable");       // jump to the granted mastery's row
+            span.classList.add("clickable");       // jump to the granted/opened mastery's row
             span.addEventListener("click", e => { e.stopPropagation(); gotoMastery(gm.name); });
             span.addEventListener("mouseenter", () => showTip(span, box => buildMasteryTip(gm, box)));
             span.addEventListener("mouseleave", () => hideTip(span));

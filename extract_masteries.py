@@ -34,7 +34,7 @@ import resolve_desc
 from resolve_desc import (resolve_description, stat_summary, describe_buff, immune_debuff_summary,
                           neutralize_field_summary, strip_refs, ref_markup)
 from missions import build_enemy_missions, missions_for, dialog_labels_for, TIER_RANK
-from dialog_map import build_dialog_map, mastery_grants
+from dialog_map import build_dialog_map, mastery_grants, mastery_opens, parse_mission_opens
 from quests import build_quests, quest_missions
 
 
@@ -1337,10 +1337,19 @@ def main():
     # dialogue choice (stage MasteryAcquired markers). Same grants are highlighted in the
     # Dialogue tab (build_dialog_map). Also an *additional* source alongside any enemy route.
     stage_dir = os.path.join(a.data, "stage")
+    # 'opened for research' channel (missionResult_Custom.lua): masteries a mission opens (craftable,
+    # no copy) regardless of choice — always the mutually-exclusive siblings of a grant. Flags the
+    # matching Story source so the tab can note "still opened…"; also fed to build_dialog_map below.
+    mission_opens = parse_mission_opens(
+        os.path.join(a.data, "script", "server", "missionResult_Custom.lua"))
+    opens_titles = mastery_opens(mission_opens, xml, dic)
     for mid, grants in mastery_grants(xml, stage_dir, dic).items():
         for g in grants:
-            sources[mid].append({"type": "Story", "mission": g["mission"], "choice": g["choice"],
-                                 "scenario": g.get("scenario")})
+            src = {"type": "Story", "mission": g["mission"], "choice": g["choice"],
+                   "scenario": g.get("scenario")}
+            if g["mission"] in opens_titles.get(mid, ()):
+                src["opened"] = True
+            sources[mid].append(src)
 
     # office/apartment tutorial grants (RefillMastery / AcquireMastery in Dialog_Office*.xml) —
     # the only mastery-grant channel outside stages; e.g. Yearning in Albus's apartment.
@@ -1513,7 +1522,7 @@ def main():
     # localizes, instead of falling back to the raw English key), else the id.
     dialogues = build_dialog_map(xml, stage_dir, dic,
                                  lambda i: mon_name_by_id.get(i) or dic.get(f"ObjectInfo/{i}/Title") or i,
-                                 quest_names=quest_missions(xml, dic))
+                                 quest_names=quest_missions(xml, dic), mission_opens=mission_opens)
 
     # board-builder data: jobs (grade 1-2) + playable characters + limit modifiers
     board_cat = {m["id"]: m["category_en"] for m in masteries}   # English engine cat (matches board columns)
@@ -1835,6 +1844,8 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                 rec["tutorial"] = True
             if s.get("scenario"):              # scenario missions: "Ch4 Scent of the Past"
                 rec["scenario"] = s["scenario"]
+            if s.get("opened"):                # also opened for research whichever choice you make
+                rec["opened"] = True
             story.append(rec)
         story.sort(key=lambda r: (not r.get("tutorial"), r["mission"], r.get("choice") or ""))
         set_names = [next((s["name"] for s in sets if s["id"] == sid), sid) for sid in m["in_sets"]]
