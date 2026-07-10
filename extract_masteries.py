@@ -32,7 +32,7 @@ import xml.etree.ElementTree as ET
 
 import resolve_desc
 from resolve_desc import (resolve_description, stat_summary, describe_buff, immune_debuff_summary,
-                          neutralize_field_summary, strip_refs, ref_markup)
+                          neutralize_field_summary, strip_refs, ref_markup, indent_block)
 from missions import build_enemy_missions, missions_for, dialog_labels_for, TIER_RANK
 from dialog_map import (build_dialog_map, mastery_grants, mastery_opens, parse_mission_opens,
                         company_opens)
@@ -1052,8 +1052,8 @@ def build_abilities(dic, ability_cls, mclass, item_sources, player_set, owners, 
             subs = [t for t in subs if t and not t.endswith("_Disable") and t in player_set]  # $SubAbility
             if subs:                                     # Message$ — list the sub-abilities they open, as chips
                 header = dic.get("WordCollection/AbilitySubMenu/Text", "Ability Submenu")
-                desc = header + "\n" + "\n".join(
-                    "    " + ref_markup("ability", dic.get(f"Ability/{t}/Title") or t) for t in subs)
+                desc = header + "\n" + indent_block("\n".join(
+                    ref_markup("ability", dic.get(f"Ability/{t}/Title") or t) for t in subs))
         abilities.append({
             "id": aid, "name": title,
             "type": dic.get(f"AbilityType/{c.get('Type')}/Title") or c.get("Type"),

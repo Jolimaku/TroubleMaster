@@ -60,6 +60,19 @@ _MULTISPACE_RE = re.compile(r" {2,}")   # collapse space runs (template typos + 
 # reduces it to the bare label for plain-text exports.
 _REF_S, _REF_SEP, _REF_E = "\x01", "\x02", "\x03"
 
+# Block-indent marker. A line beginning with this control char is a continuation/effect line that the
+# web renders inside a padded container, so the *whole* wrapping line stays indented — not just its
+# first row, which is all the old leading-spaces hack achieved once descriptions became rich text.
+# Line-start only, single char: it never collides with game text or the ref sentinels, and apply_josa
+# ignores it (the char after it is always ordinary text, never a josa bracket). `strip_refs` turns it
+# back into the historical 4 leading spaces for the plain-text (non-web) dumps.
+INDENT = "\x11"
+
+
+def indent_block(s):
+    """Prefix every line of `s` with the block-indent marker (see `INDENT`)."""
+    return "\n".join(INDENT + ln for ln in s.split("\n"))
+
 
 def _ref(kind, title):
     """Sentinel-wrapped positioned reference of `kind` (or "" for an empty/None title)."""
@@ -70,8 +83,9 @@ _REF_RE = re.compile(_REF_S + r"([a-z]+)" + _REF_SEP + "([^" + _REF_E + "]*)" + 
 
 
 def strip_refs(s):
-    """Reduce sentinel refs to their bare label — for plain-text (non-web) outputs."""
-    return _REF_RE.sub(lambda m: m.group(2), s) if s else s
+    """Reduce sentinel refs to their bare label and block-indent markers to 4 leading spaces —
+    for plain-text (non-web) outputs."""
+    return _REF_RE.sub(lambda m: m.group(2), s).replace(INDENT, "    ") if s else s
 
 
 def ref_markup(kind, title):
@@ -605,8 +619,7 @@ def resolve_description(dic, owner, idprefix="Mastery"):
         for k, v in resolved.items():
             pool.setdefault(k, v)
 
-    def indent(s):
-        return "\n".join("    " + ln for ln in s.split("\n"))
+    indent = indent_block   # block-indent marker per line (web indents the whole wrapping block)
 
     lines = []
     in_section = False          # inside a bare section header's body → indent its plain effect lines
@@ -631,14 +644,14 @@ def resolve_description(dic, owner, idprefix="Mastery"):
 
         # collapse runs of spaces the game's rich-text renderer would (source-template double spaces
         # e.g. "For every 1  $Type$", and gaps left by runtime tokens that resolve empty — $Grade$,
-        # $MasteryPerformanceEffectList$…). Done per line, before the 4-space indent is added.
+        # $MasteryPerformanceEffectList$…). Done per line, before the block-indent marker is added.
         main = _MULTISPACE_RE.sub(" ", PLACE_RE.sub(sub, text)) if text else ""
         case = _case_title(dic, prop, idprefix, mid, n)
         if case:                        # a Custom caseTitle can carry $tokens$ (its own FormatKeyword)
             case = _MULTISPACE_RE.sub(" ", PLACE_RE.sub(sub, case))
         lb = str(prop.get("LineBreak")).lower() == "true"
         # game layout: caseTitle then Text. When the caseTitle is on its own line
-        # (CaseLineBreak="true") the Text belongs "within" that case, so indent it 4 spaces for
+        # (CaseLineBreak="true") the Text belongs "within" that case, so mark it for block-indent
         # readability; otherwise it's an inline "label: text" line. A caseTitle with **no** Text is a
         # bare section header — its effects come on the following standalone lines (e.g. "Reinforced
         # Machine" then three effect lines), so those get indented via `in_section`. A Text with no

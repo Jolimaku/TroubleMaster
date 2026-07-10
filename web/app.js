@@ -29,7 +29,14 @@
   // in detail/card views (parseMarkup) and flattened to the bare label for plain-text contexts
   // (search blobs, tooltips, compact previews). Declared up here so the blob pass below can use it.
   const REF_RE = /\x01([a-z]+)\x02([^\x03]*)\x03/g;
-  function stripMarkup(text) { return (text || "").replace(REF_RE, (_, k, label) => label); }
+  // Block-indent marker (\x11): a line beginning with it is a continuation/effect line rendered inside
+  // an indented container (parseMarkup) so the whole wrapping line stays indented — replaces an older
+  // leading-spaces hack that only indented the first row. For plain-text contexts we flatten it back
+  // to the historical 4 leading spaces (harmless: inline previews collapse whitespace, tooltips pre-wrap).
+  const IND = "\x11";
+  function stripMarkup(text) {
+    return (text || "").replace(REF_RE, (_, k, label) => label).split(IND).join("    ");
+  }
 
   // $DamageAmount$ is a runtime, unit-dependent value the static data can't compute (see TODO to
   // eventually surface real numbers). Swap the raw token for a clear placeholder so it reads as
@@ -277,7 +284,7 @@
       el("div.tip-name", { text: s.name }, s.dlc && el("span.badge.dlc", { text: s.dlc })),
       s.type && el("div.tip-meta", { text: s.type }),
       el("div.tip-comp", {}, s.components.map(c => el("div", { text: "• " + c.name }))),
-      s.bonus && el("div.tip-bonus", { text: stripMarkup(s.bonus) }));
+      s.bonus && descBlock("div.tip-bonus", s.bonus));
   }
   // cost is a board stat — show it (incl. a genuine 0) only for board-placeable masteries (those
   // routed to the Masteries / Modules tab = group normal/module). For non-board masteries a 0 is
@@ -295,7 +302,7 @@
     add(box,
       el("div.tip-name", { text: m.name }),
       meta.childNodes.length ? meta : null,
-      m.description && el("div.tip-desc", { text: stripMarkup(m.description) }),
+      m.description && descBlock("div.tip-desc", m.description),
       m.grantsAbility && el("div.tip-grants",
         { text: t("detail.grantsAbility", "Grants ability:") + " " + m.grantsAbility }),
       m.flavor && el("div.tip-flavor", { text: "“" + m.flavor + "”" }));
@@ -333,7 +340,7 @@
       seen.add(label);
       box.append(el("div.tip-buffeffect", {},
         el("div.tip-buffname", { text: label }),
-        el("div.tip-buffbody", { text: stripMarkup(buffDesc[label]) })));
+        descBlock("div.tip-buffbody", buffDesc[label])));
     }
   }
   function buildAbilityTip(a, box) {
@@ -341,7 +348,7 @@
     add(box,
       el("div.tip-name", { text: a.name }),
       meta && el("div.tip-meta", { text: meta }),
-      a.description && el("div.tip-desc", { text: stripMarkup(a.description) }));
+      a.description && descBlock("div.tip-desc", a.description));
     appendBuffEffects(box, a.description);
   }
   function abilityChip(name) {
@@ -352,14 +359,14 @@
   function buildBuffTip(name, box) {
     add(box,
       el("div.tip-name", { text: name }),
-      el("div.tip-desc", { text: stripMarkup(buffDesc[name]) }));
+      descBlock("div.tip-desc", buffDesc[name]));
   }
   // id-resolved buff (dialogue "gains X") — {t: Title, e: effect}; keyed by id so colliding Titles
   // resolve to the exact buff (the enemy "Anger" state vs the Excitement stat buff both read "Rage")
   function buildBuffTipData(b, box) {
     add(box,
       el("div.tip-name", { text: b.t }),
-      el("div.tip-desc", { text: stripMarkup(b.e) }));
+      descBlock("div.tip-desc", b.e));
   }
   // a buff *group* card: the family name + its member buffs (each with the core line of its effect)
   function buildGroupTip(title, box) {
@@ -396,17 +403,35 @@
   }
   // render `text` (with inline ref markup) into `box`, emitting a chip per ref and preserving the
   // surrounding prose / newlines. Replaces the old name-matching linker.
-  function parseMarkup(box, text) {
-    box.textContent = "";
-    if (!text) return;
+  // parse the inline ref markup within one logical line into `node` (text nodes + ref chips)
+  function appendLine(node, text) {
     let last = 0, m; REF_RE.lastIndex = 0;
     while ((m = REF_RE.exec(text))) {
-      if (m.index > last) box.append(text.slice(last, m.index));
-      box.append(refNode(m[1], m[2]));
+      if (m.index > last) node.append(text.slice(last, m.index));
+      node.append(refNode(m[1], m[2]));
       last = m.index + m[0].length;
     }
-    if (last < text.length) box.append(text.slice(last));
+    if (last < text.length) node.append(text.slice(last));
   }
+  // render a description as one block per source line. A line flagged with the block-indent marker
+  // (IND) gets a padded container so *every* wrapped row stays indented, not just the first; a blank
+  // source line renders as a one-line paragraph gap (see .desc-line:empty in style.css). `rich` chips
+  // inline refs (detail/cards); plain flattens them to labels (hover tooltips, non-interactive).
+  function renderDesc(box, text, rich) {
+    box.textContent = "";
+    if (!text) return;
+    for (const raw of text.split("\n")) {
+      const indented = raw.startsWith(IND);
+      const content = indented ? raw.slice(IND.length) : raw;
+      const line = el(indented ? "div.desc-line.desc-indent" : "div.desc-line");
+      if (rich) appendLine(line, content);
+      else line.textContent = stripMarkup(content);
+      box.append(line);
+    }
+  }
+  function parseMarkup(box, text) { renderDesc(box, text, true); }
+  // block-indented plain text (refs → bare labels) in a fresh element of `tag` — for hover tooltips
+  function descBlock(tag, text) { const e = el(tag); renderDesc(e, text, false); return e; }
   function matches(blob) {
     if (!state.q) return true;
     return state.q.split(/\s+/).every(t => blob.includes(t)); // AND of terms

@@ -624,16 +624,20 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   (`FieldEffect`/`MissionWeather`/`MissionTemperature`/`ItemRank`/`CoverCondition`…), or a reference
   to another `Mastery`/`Ability`/`Buff`/`Status`/`MasteryType`/`Race`/`ESP`/… The `CaseType` **is**
   the idspace; ids resolve to `Title`s (a comma-list when `CaseValueType="table"`). The caseTitle
-  joins its `Text` with a newline (`CaseLineBreak="true"`, where the `Text` is then **indented 4
-  spaces** as it's "within" that case) or `": "` — so `Neutralization` → "**Physical attack:**
+  joins its `Text` with a newline (`CaseLineBreak="true"`, where the `Text` is then **block-indented**
+  as it's "within" that case) or `": "` — so `Neutralization` → "**Physical attack:**
   Ignores enemy's Armor by 25%", `WildLife` → its Field/Weather/Temperature blocks with indented
   effects, `Legend2` → "**When attacking:** …/**When attacked:** …". A caseTitle with **empty `Text`**
   is a bare *section header* whose effects arrive on the *following* standalone (`None`-case) lines
   (e.g. `Module_FrameEnhanced` → "Reinforced Machine" then three effect lines); those get indented
   too via an `in_section` flag — set by an empty-`Text` header, cleared by a self-contained caseTitle
   (so a general trailing note like DarkHunter's "While Revealed…" stays flush) or a paragraph break.
-  (The web detail renders these with `white-space: pre-wrap` so the indents and blank-line paragraph
-  breaks show.) A property with
+  Indentation is **not** literal leading spaces: each indented line is prefixed with a **block-indent
+  marker** (`\x11`, `resolve_desc.INDENT` / `indent_block`) that the web renders inside a padded
+  container (`.desc-indent`) so the *whole* wrapping line stays indented, not just its first row (spaces
+  only indent the first row once descriptions became rich text). `strip_refs` flattens the marker back
+  to 4 leading spaces for the plain-text (`output/`) dumps. `parseMarkup` renders one block per source
+  line (blank lines → a one-line paragraph gap via `.desc-line:empty`). A property with
   `LineBreak="true"` ends a paragraph — the game appends an extra newline (`GetMasteryMasteryDescBase
   Text` joins with `\n`), so the resolver emits a **blank-line separator** there (the gap above each
   `WildLife` section header). `resolve_desc._case_title` handles all of this; **`Mastery`/`Ability`/
