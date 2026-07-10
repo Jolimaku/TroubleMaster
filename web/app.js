@@ -236,6 +236,7 @@
   // buff effect lookup (name → text), keyed by the label a `buff` inline-ref carries — so a chip's
   // hover shows the effect, mirroring the in-game nested tooltip.
   const buffDesc = DATA.buffs || {};
+  const buffById = DATA.buffsById || {};      // buff id → {t: Title, e: effect} for dialogue "gains X"
   const buffGroups = DATA.buffGroups || {};   // group title → member buff titles (group cards)
   const tip = el("div.hover-tip");
   document.body.appendChild(tip);
@@ -352,6 +353,13 @@
     add(box,
       el("div.tip-name", { text: name }),
       el("div.tip-desc", { text: stripMarkup(buffDesc[name]) }));
+  }
+  // id-resolved buff (dialogue "gains X") — {t: Title, e: effect}; keyed by id so colliding Titles
+  // resolve to the exact buff (the enemy "Anger" state vs the Excitement stat buff both read "Rage")
+  function buildBuffTipData(b, box) {
+    add(box,
+      el("div.tip-name", { text: b.t }),
+      el("div.tip-desc", { text: stripMarkup(b.e) }));
   }
   // a buff *group* card: the family name + its member buffs (each with the core line of its effect)
   function buildGroupTip(title, box) {
@@ -1382,6 +1390,11 @@
             span.classList.add("clickable");       // jump to the granted/opened mastery's row
             span.addEventListener("click", e => { e.stopPropagation(); gotoMastery(gm.name); });
             span.addEventListener("mouseenter", () => showTip(span, box => buildMasteryTip(gm, box)));
+            span.addEventListener("mouseleave", () => hideTip(span));
+          } else if (c.kind === "buff" && buffById[c.buff]) {
+            const b = buffById[c.buff];            // id-keyed → exact buff even when Titles collide
+            span.classList.add("hoverable");       // hover-preview the buff's effect (no jump target)
+            span.addEventListener("mouseenter", () => showTip(span, box => buildBuffTipData(b, box)));
             span.addEventListener("mouseleave", () => hideTip(span));
           }
           return span;

@@ -626,8 +626,19 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   `Format`, through the shared `_stat_delta_line`) + action restrictions + an aura line + duration.
   `Eval_<Stat>` values are runtime expressions; `_parse_eval` handles the `coef * Lv` family (also
   `Lv`, `-Lv*coef`, bare constant) → the "… per level" template (≈23 buffs, e.g. Boosts_Speed /
-  Break\* / Frozen Blood). 318 buffs now resolve; the remaining tail (HP-over-time, discharge/reflect,
-  in-range fortress auras, `ImmuneRace`) is deferred (TODO "Statuses / buffs" Stage 4). Mastery
+  Break\* / Frozen Blood). A `Base_<Stat>` can also be a **level-indexed list** (`"100, 200, 300"` =
+  the value at buff Lv 1/2/3); the **first (Lv 1)** value is taken, matching the in-game tooltip for
+  the freshly-applied buff — without this the whole stat line was dropped (`float("100, 200, 300")`
+  throws), so e.g. **Faith / Brave** (Excitement family) rendered *no* effect at all. 320 buffs now
+  resolve; the remaining tail (HP-over-time, discharge/reflect, in-range fortress auras, `ImmuneRace`)
+  is deferred (TODO "Statuses / buffs" Stage 4). ⚠️ **Titles collide** — several distinct buffs share
+  a `Title` (the enemy **Anger** state and the Excitement **stat** buff both read *Rage* / 분노), so the
+  Title-keyed `DATA.buffs` (built by `build_buffs`, first-non-empty per Title, for the *inline* buff
+  refs in descriptions which only carry a Title) can hold the wrong one. Dialogue **"gains X"**
+  consequences instead carry the buff **id** and resolve via a separate **id-keyed** `DATA.buffsById`
+  (`build_dialogue_buffs`, only the ids a dialogue actually references — 16 buffs), so *Rage* there
+  correctly shows +100 Attack/ESP, not "can attack civilians." (The inline-ref path is still
+  Title-keyed and can mis-resolve a collided Title — a separate, lower-value gap.) Mastery
   *debuff-immunity* (`ImmuneDebuff_BuffGroup`) is a separate `immune_debuff_summary` in the mastery
   `describe()` fallback, not part of `describe_buff`. The shared `format_message` does `GuideMessage`
   `$token$` substitution, colour-markup stripping, and **Korean josa** selection (`apply_josa` —

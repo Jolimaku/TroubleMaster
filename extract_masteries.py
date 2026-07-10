@@ -1084,6 +1084,25 @@ def build_buffs(dic, buff_cls, status_fmt):
     return out
 
 
+def build_dialogue_buffs(dialogues, dic, buff_cls, status_fmt):
+    """{buff id → {t: Title, e: effect text}} for the buffs a dialogue "gains <Buff>" consequence
+    references. Keyed by *id* (not Title) so colliding Titles resolve to the exact buff — the enemy
+    "Anger" state and the Excitement stat buff both read "Rage"/분노, and Title-keying picked the
+    wrong one. Only buffs with substantive effect text are kept; the rest fall back to plain text."""
+    ids = {c["buff"] for st in dialogues for d in st.get("decisions", [])
+           for o in d["options"] for c in o.get("consequences", [])
+           if c.get("kind") == "buff" and c.get("buff")}
+    out = {}
+    for bid in sorted(ids):
+        c = buff_cls.get(bid)
+        if c is None:
+            continue
+        eff = describe_buff(dic, c, status_fmt)
+        if eff.strip():
+            out[bid] = {"t": dic.get(f"Buff/{bid}/Title") or bid, "e": eff}
+    return out
+
+
 def build_buff_groups(dic, buff_cls, group_cls):
     """Title → member-buff-titles for each buff *group* (e.g. Bleeding → [Bleeding, Severe Bleeding,
     Rupture]). A description that references a group (`$MasteryBuffGroup$`) links to a group card
@@ -1534,6 +1553,7 @@ def main():
     abilities = build_abilities(dic, ability_cls, mclass, item_sources, player_set, ability_owners, auto_source)  # Abilities reference tab
     buffs = build_buffs(dic, buff_cls, status_fmt)                     # buff effect lookup (hover tooltips)
     buff_groups = build_buff_groups(dic, buff_cls, group_cls)         # buff-group → members (group cards)
+    dialogue_buffs = build_dialogue_buffs(dialogues, dic, buff_cls, status_fmt)  # id-keyed, for "gains X" hovers
 
     # ---- beast species masteries: form-specific heading + the forms that offer it -----------
     # A species evolution-mastery offered by a single form is labelled with that form's name; one
@@ -1582,7 +1602,7 @@ def main():
                    masteries, sets, enemy_missions, mission_info, placed, enemy_dialog,
                    dialogues, jobs, pcs, esp_slots, board_mods, slot_unlock,
                    beasts, beast_families, beast_stages, beast_evo, machine, abilities, buffs, buff_groups,
-                   jt_teams=jt_teams, quests=quests,
+                   jt_teams=jt_teams, quests=quests, dialogue_buffs=dialogue_buffs,
                    high_risk_label=dic.get("Help/GameDifficultyAdditionalSetting_HighRiskReturn/Base_Title", "High Risk") or "High Risk",
                    generated=source_date(xml))
     if a.lang == "eng":   # share-code lookup tables are language-independent — emit once
@@ -1676,7 +1696,7 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                    esp_slots=None, board_mods=None, slot_unlock=None, builder_beasts=None, beast_families=None,
                    beast_stages=None, beast_evo=None, machine=None, abilities=None, buffs=None,
                    buff_groups=None, jt_teams=None, quests=None, high_risk_label="High Risk",
-                   generated=None):
+                   generated=None, dialogue_buffs=None):
     """Emit web/data.js (window.TS_DATA) — denormalized, named masteries only."""
     enemy_missions = enemy_missions or {}
     mission_info = mission_info or {}
@@ -1916,6 +1936,7 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                "beasts": builder_beasts or [], "beastFamilies": beast_families or [],
                "beastStages": beast_stages or {}, "beastEvo": beast_evo or [],
                "machine": machine or {}, "abilities": abilities or [], "buffs": buffs or {},
+               "buffsById": dialogue_buffs or {},
                "buffGroups": buff_groups or {}, "quests": quests or [],
                "counts": {"masteries": len(web_masteries), "sets": len(web_sets)}}
     os.makedirs(os.path.dirname(path), exist_ok=True)

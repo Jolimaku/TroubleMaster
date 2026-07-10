@@ -159,7 +159,9 @@ Tabs:
   for research / timer). A `○ Opens X for research` badge marks a mutually-exclusive grant group:
   the choice awards one member but opens the rest for crafting (see
   [`DATAMINING.md` → Opened for research](DATAMINING.md#data-model-notes); the awarding Story
-  source on the Masteries tab carries a matching "still opened…" note).
+  source on the Masteries tab carries a matching "still opened…" note). Mastery grant/open badges
+  link to the row; a `gains <Buff>` badge hover-previews that buff's effect (resolved by buff **id**,
+  so colliding Titles like *Rage* show the right effect).
   Multi-step conversations **chain**: a follow-up decision nests under the option that leads to
   it, and each option can fold open to the scripted rules it triggers. Every stage also has a
   collapsible **Full script** — its trigger graph rendered as readable pseudo-code, with spoken

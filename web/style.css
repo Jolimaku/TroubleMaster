@@ -347,6 +347,7 @@ tr.detail td { padding: 4px 16px 16px; }
 .conseq.kind-opened::before { content: "○ "; }
 .conseq.clickable { cursor: pointer; }
 .conseq.clickable:hover { background: var(--accent); color: #1a1a1a; }
+.conseq.hoverable { cursor: help; }        /* buff badge: hover-previews its effect, no jump */
 /* full-script (per-stage event logic) */
 .script-section { margin-top: 6px; }
 .script-toggle { color: var(--accent2); cursor: pointer; font-size: 12px; padding: 4px 0; user-select: none; }

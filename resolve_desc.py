@@ -245,8 +245,10 @@ def describe_buff(dic, buff, status_fmt, with_duration=True):
     #    per-level Desc template). Both render via the game's Status Desc_Increase/Decrease[ByLevel].
     for k, raw in buff.attrib.items():
         if k.startswith("Base_") and k not in _BUFF_PARAM:
+            # a level-indexed list ("100, 200, 300") gives the base (Lv1) value, matching the
+            # in-game tooltip for the freshly-applied buff — e.g. Faith/Brave (Excitement) show 100
             try:
-                val = float(raw)
+                val = float((raw or "").split(",")[0])
             except (TypeError, ValueError):
                 continue
             line = _stat_delta_line(dic, k[5:], val, status_fmt)

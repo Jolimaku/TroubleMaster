@@ -92,8 +92,18 @@ def _objective_change(a, dic):
     return None
 
 
+def _cons_dict(c):
+    """A consequence tuple → its web dict. The optional 3rd element is a cross-link id whose key
+    depends on the kind: mastery/opened → the mastery id (`mastery`); buff → the buff *id* (`buff`),
+    which app.js hover-previews from DATA.buffsById (id-keyed, so colliding Titles resolve exactly)."""
+    d = {"kind": c[0], "text": c[1]}
+    if len(c) > 2:
+        d["buff" if c[0] == "buff" else "mastery"] = c[2]
+    return d
+
+
 def _describe(action, namer, dic):
-    """Return (category, localized text) for a consequence badge, or None to skip."""
+    """Return (category, localized text[, cross-link id]) for a consequence badge, or None to skip."""
     t = action.get("Type")
     if t == "UnitAddBuff":
         if action.get("Name") in IGNORE_BUFFS:
@@ -103,12 +113,14 @@ def _describe(action, namer, dic):
         if not units:
             return None
         who, buff = ", ".join(units), _buffname(dic, action.get("Name"))
-        return ("buff", _L(dic, f"{who} gains {buff}", f"{who} {buff} 획득"))
+        # 3rd element = the buff *id* (not Title), so app.js resolves the exact buff's effect —
+        # Titles collide (the enemy "Anger" state and the stat buff both read "Rage"/분노)
+        return ("buff", _L(dic, f"{who} gains {buff}", f"{who} {buff} 획득"), action.get("Name"))
     if t == "TeamAddBuff":
         if action.get("Name") in IGNORE_BUFFS:
             return None
         team, buff = action.get("Team"), _buffname(dic, action.get("Name"))
-        return ("buff", _L(dic, f"{team} team gains {buff}", f"{team}팀 {buff} 획득"))
+        return ("buff", _L(dic, f"{team} team gains {buff}", f"{team}팀 {buff} 획득"), action.get("Name"))
     if t in TEAM_ACTIONS:
         team = action.get("Team") or ""
         units = [namer(u.get("ObjectKey")) for u in action.iter("Unit") if u.get("ObjectKey")]
@@ -1632,9 +1644,7 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None, mi
                 triggers = sorted({i for (var, val) in setvars if var in choice_vars
                                    for i in gate_index.get((var, val), ())})
                 options.append({"text": text, "sets": [f"{v}={val}" for v, val in setvars],
-                                "consequences": [dict(kind=c[0], text=c[1],
-                                                      **({"mastery": c[2]} if len(c) > 2 else {}))
-                                                 for c in uniq],
+                                "consequences": [_cons_dict(c) for c in uniq],
                                 "triggers": triggers, "plays": plays_scenes})
             # drop decisions with nothing meaningful left; dedupe difficulty-variant copies
             if not options:
