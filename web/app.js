@@ -9,6 +9,11 @@
     for (const k in (vars || {})) s = s.split("{" + k + "}").join(vars[k]);
     return s;
   };
+  // mission case type (Scenario / Quest / Ordinary / Violent): localized short name for a filter
+  // option, and the "{name} Case" badge tooltip. Korean uses the in-game 사건 terms (시나리오/의뢰/
+  // 일반/강력 사건). Case values are a stable English enum in the data, so translate at display time.
+  const caseName = c => t("case." + c, c);
+  const caseTip = c => tf("case.tooltip", "{case} Case", { case: caseName(c) });
   // (the static-shell localization sweep runs earlier, in i18n.js, so the chrome is translated
   // before the large data file parses — see the <script> order in index.html. app.js only handles
   // dynamic strings via t()/tf().)
@@ -783,7 +788,7 @@
               return;
             }
             const item = el("span.mission", {},
-              el("span", { class: "lvl-badge case-" + mm.case, text: mm.level || "?", title: mm.case + " Case" }));
+              el("span", { class: "lvl-badge case-" + mm.case, text: mm.level || "?", title: caseTip(mm.case) }));
             let suffix = "";
             if (mm.dialog) suffix = typeof mm.dialog === "string" ? ` (dialog: ${mm.dialog})` : " (dialog)";
             else if (mm.diff) suffix = ` [${mm.diff}]`;
@@ -971,7 +976,7 @@
       card.append(el("div.quest-unlock", {},
         el("span.quest-unlock-lbl", { text: t("quest.unlockAfter", "Unlocks after") + ": " }),
         q.unlockMission.level != null && el("span", { class: "lvl-badge case-" + q.unlockMission.case,
-          text: q.unlockMission.level, title: q.unlockMission.case + " Case" }),
+          text: q.unlockMission.level, title: caseTip(q.unlockMission.case) }),
         el("span", { text: q.unlockMission.name })));
     if (q.locations.length) card.append(el("div.quest-loc", { text: "📍 " + q.locations.join(" · ") }));
     if (q.objective) card.append(el("div.quest-obj", { text: q.objective }));
@@ -1107,7 +1112,10 @@
       values = [...new Set(src.map(x => x.type).filter(Boolean))].sort();
     }
     els.type.replaceChildren(new Option(t("filter.all", "All"), ""));
-    values.forEach(t => els.type.appendChild(new Option(t, t)));
+    // dialogue values are raw case-type keys (Scenario/Quest/…) — show a localized label but keep
+    // the key as the option value; quest/set values are already localized in the data, so pass through
+    const optLabel = state.view === "dialogue" ? caseName : (v => v);
+    values.forEach(v => els.type.appendChild(new Option(optLabel(v), v)));
     els.type.value = "";
     state.type = "";
   }
@@ -1405,7 +1413,7 @@
       const row = el("div.dlg-stage");
       const dn = s.decisions.length;   // separate singular/plural keys so EN reads grammatically (Korean ignores plural)
       const head = el("div.dlg-head", {},
-        el("span", { class: "lvl-badge case-" + s.case, text: s.level || "?", title: s.case + " Case" }),
+        el("span", { class: "lvl-badge case-" + s.case, text: s.level || "?", title: caseTip(s.case) }),
         // scenario missions: lead with the story name + chapter (you find them by name first),
         // then the location; side-quest stages lead with the quest name instead (they share a
         // location with no chapter name to tell them apart); other case types have only a location

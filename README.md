@@ -86,8 +86,8 @@ Tabs:
   expands to the resolved description, flavor, the character/job/level unlocks, and
   the full enemy list with levels and the missions each enemy appears in,
   shown like the in-game "Appearance Location" panel: a recommended-level badge
-  coloured by case type (**red** = Scenario, **blue** = Ordinary, **purple** =
-  Violent) next to each mission name. A mission is also tagged `[Normal+]` /
+  coloured by case type (**red** = Scenario, **green** = Requested (side-quest stages),
+  **blue** = Ordinary, **purple** = Violent) next to each mission name. A mission is also tagged `[Normal+]` /
   `[Hard+]` when the enemy only appears at that difficulty or higher (untagged =
   all difficulties). Set chips cross-link to the Sets tab, and hovering one previews that
   set's card (components + bonus) in a tooltip. Where a description **names another mastery**

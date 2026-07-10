@@ -238,6 +238,7 @@ tr.detail td { padding: 4px 16px 16px; }
   margin-right: 5px; border-radius: 3px; color: #fff; font-weight: 700; font-size: 11px;
 }
 .case-Scenario { background: #c0392b; }  /* red   */
+.case-Quest    { background: #1e8449; }  /* green — side-quest stages */
 .case-Ordinary { background: #2d6fb3; }  /* blue  */
 .case-Violent  { background: #8e44ad; }  /* purple */
 
@@ -301,7 +302,7 @@ tr.detail td { padding: 4px 16px 16px; }
 .dlg-scenario { font-weight: 600; color: var(--accent); }
 /* side-quest stages lead with the quest name (blue, matching the Quests tab) instead of a
    gold story-chapter name — a stage has one or the other, never both */
-.dlg-quest { font-weight: 600; color: var(--accent2); }
+.dlg-quest { font-weight: 600; color: #6cc24a; }  /* green — side-quest name (every dialogue-tab quest is the Quest case) */
 /* when a scenario/quest name leads, the location reads as a lighter subtitle after it */
 .dlg-scenario + .dlg-title, .dlg-quest + .dlg-title { font-weight: 400; color: var(--muted); }
 .dlg-scenario + .dlg-title::before, .dlg-quest + .dlg-title::before { content: "· "; }

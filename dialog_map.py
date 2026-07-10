@@ -1386,7 +1386,7 @@ def mastery_grants(xml_dir, stage_dir, dic):
 
 def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
     """Return a list of stage dialogue records — stages with a real decision, plus every
-       Scenario-case stage (story/tutorial/quest) even when it has no surfaced choice, for its
+       story-scripted stage (Scenario or Quest case) even when it has no surfaced choice, for its
        full-script rendering. Each: {stage, title, level, case, decisions:[{prompt,
        options:[{text, consequences}]}], script}. Scenario stages may have decisions:[].
        `quest_names` ({mission_id: quest_title}) labels a quest stage with its quest name (it
@@ -1401,22 +1401,22 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
         if not missions:
             continue
         rep = min((mission_info[m] for m in missions), key=lambda mi: (mi["level"] or 999))
-        # Scenario-case stages (story / tutorial / quest — the ones with the interesting scripting)
-        # are kept even without a surfaced decision, for their full-script rendering. Raid (Violent)
-        # and Common (Ordinary) stages are otherwise dropped: their only choices are deploy/entry-
-        # route picks and "boss defeated / done — continue or retreat?" prompts, none a story
-        # decision worth surfacing. (Chubong Island's entry pick does grant a team buff, but it's
-        # dropped with the rest.) A few Quest_* missions that ZoneEventGen tags Raid→Violent keep
-        # their own `Quest_` ids, so they don't match these prefixes and aren't dropped either way.
-        is_scenario = any(mission_info[m].get("case") == "Scenario" for m in missions)
-        if not is_scenario and all(m.startswith(("Raid_", "Common_")) for m in missions):
+        # Story-scripted stages — Scenario (story/tutorial) and Quest (side-quest) cases, the ones
+        # with the interesting scripting — are kept even without a surfaced decision, for their
+        # full-script rendering. Raid (Violent) and Common (Ordinary) stages are otherwise dropped:
+        # their only choices are deploy/entry-route picks and "boss defeated / done — continue or
+        # retreat?" prompts, none a story decision worth surfacing. (Chubong Island's entry pick does
+        # grant a team buff, but it's dropped with the rest.) Side-quest stages carry `Quest_` ids
+        # (case "Quest"), so they're never matched by the Raid_/Common_ drop below anyway.
+        is_story = any(mission_info[m].get("case") in ("Scenario", "Quest") for m in missions)
+        if not is_story and all(m.startswith(("Raid_", "Common_")) for m in missions):
             continue
         try:
             r = ET.parse(f).getroot()
         except ET.ParseError:
             continue
         choices_present = next(r.iter("DialogChoice"), None)
-        if choices_present is None and not is_scenario:
+        if choices_present is None and not is_story:
             continue
 
         namer = _unit_namer(r, monster_name)
@@ -1519,7 +1519,7 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None):
             decisions.append({"prompt": prompt, "options": options, "scene_key": scene_key,
                               "shown_by": sorted(set(shown_by(scene_key))) if scene_key else []})
 
-        if not decisions and not is_scenario:
+        if not decisions and not is_story:
             continue
         # conversation chaining: an option "leads to" a follow-up decision two ways —
         #  (a) indirect: the option sets a StageVariable that gates a trigger which plays the scene

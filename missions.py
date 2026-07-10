@@ -11,7 +11,9 @@ Sources:
                       <Trigger Group="Difficulty"> ExcludeUnit actions drop units on
                       lower difficulties, giving each enemy's minimum difficulty.
 
-Case colour (in-game): Scenario=red, Ordinary=blue, Violent=purple.
+Case colour: Scenario=red, Ordinary=blue, Violent=purple. Side-quest stages (`Quest_*`
+ids) are pulled out into a synthetic Quest=green category of our own (not an in-game case)
+so they read apart from the main story — see `_classify_case`.
 Missions with no resolvable case (JointTraining / test / PvP maps) are dropped.
 """
 import os
@@ -118,7 +120,15 @@ def mission_summons(xml_dir):
 
 
 def _classify_case(mid, objective_type, zeg_type):
-    """Return Scenario | Ordinary | Violent | None for a mission."""
+    """Return Scenario | Quest | Ordinary | Violent | None for a mission."""
+    # Side-quest battle stages (`Quest_*` ids — the NPC request chains) are their own category,
+    # shown apart from the main story. This wins over every other signal, including a
+    # ZoneEventGen tag or a `Hunting` objective, so *all* quest stages land in one bucket
+    # regardless of the case colour the game would otherwise give them (e.g. Quest_Hundred01 /
+    # Quest_Leo01 are `Type="Hunting"`, which used to fall through to Violent). In practice no
+    # `Quest_` mission carries a ZoneEventGen entry, so ordering it first is safe either way.
+    if mid.startswith("Quest_"):
+        return "Quest"
     if zeg_type in ZEG_CASE:
         return ZEG_CASE[zeg_type]
     if objective_type == "Hunting":
@@ -127,7 +137,7 @@ def _classify_case(mid, objective_type, zeg_type):
         return "Violent"
     if mid.startswith("Common_"):
         return "Ordinary"
-    if mid.startswith(("Tutorial_", "Scenario_", "Quest_")):
+    if mid.startswith(("Tutorial_", "Scenario_")):
         return "Scenario"
     return None
 

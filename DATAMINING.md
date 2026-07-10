@@ -696,9 +696,15 @@ in the Class Traits tab (Musician's "Passionate Performance" etc.).
 The Masteries tab's per-enemy "Appearance Location" panel resolves each enemy's missions and
 their case-coloured level badges from the stage/mission data.
 
-Case type comes from `ZoneEventGen.xml` (`Scenario`/`Raid`→Violent/`Normal`→Ordinary),
-falling back to `Hunting`→Violent and the mission-id prefix; recommended level is
-the mission's `Lv`. Maps with no resolvable case (JointTraining/PvP/test) are omitted.
+Case type: side-quest stages (`Quest_*` mission ids) are pulled out first into a synthetic
+case we key as **`Quest`** (green) — shown in the tool as the game's own term **"Requested"**
+(의뢰 사건; the other three, Scenario/Ordinary/Violent, already match the in-game case names).
+This wins over everything, so all quest battles read apart from the main story regardless of
+the case colour the game would give them (e.g.
+`Quest_Hundred01` / `Quest_Leo01` are `Type="Hunting"`, which would otherwise be Violent). The
+rest come from `ZoneEventGen.xml` (`Scenario`/`Raid`→Violent/`Normal`→Ordinary), falling back
+to `Hunting`→Violent and the `Tutorial_`/`Scenario_` id prefix (→Scenario); recommended level
+is the mission's `Lv`. Maps with no resolvable case (JointTraining/PvP/test) are omitted.
 **Dev/test scaffolding stages are dropped**: `build_mission_index` skips any mission whose
 localized `Mission/<id>/LocationTitle` is empty — these are dev scaffolding maps (e.g. mission
 `nts` = `new_test_stage.stage`, `LocationTitle=""`, `Lv="0"`, `Type="Hunting"`) that otherwise
@@ -820,9 +826,10 @@ The **Dialogue** tab shows the stages that have branching choices, built by `dia
 each stage's event-graph. **Raid (Violent) and Common (Ordinary) missions are excluded**
 (`build_dialog_map` drops any stage whose missions all have `Raid_`/`Common_` ids): their only
 choices are deploy/entry-route picks and "boss defeated / done — continue or retreat?" prompts,
-which carry no story decision. A few `Quest_*` missions that ZoneEventGen tags Raid→Violent (e.g.
-*Silver Cloud Junk Dump*'s item/buff picks) keep their `Quest_` ids, so they aren't matched and
-stay — leaving the tab effectively Scenario-only.
+which carry no story decision. Kept are the story-scripted stages — the **Scenario** (story/
+tutorial) and **Quest** (side-quest, `Quest_*` ids) cases — even when a stage surfaces no choice,
+so their full script still renders (`is_story` in `build_dialog_map`). Quest stages carry `Quest_`
+ids, so the Raid_/Common_ drop never touches them regardless.
 
 Each decision's consequence is tagged (fight / join / leave / third-party / buff / reward /
 mission outcome / **objective**). "Joins you" is driven mainly by the party-membership action (`UpdateUserMember`
