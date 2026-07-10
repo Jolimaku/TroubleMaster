@@ -1528,6 +1528,33 @@ def mastery_opens(mission_opens, xml_dir, dic):
     return out
 
 
+def company_opens(lua_path, xml_dir, dic):
+    """{company-mastery id -> mission title}: **player** company policies a story mission *unlocks*
+    (`dc:UpdateCompanyProperty(company, 'CompanyMasteries/<id>/Opened', true)` in
+    missionResult_Custom.lua). Purely unlocked — an adoptable company policy, no grant/copy and no
+    research. HardFight ← Iron Forest Resource Management (`Tutorial_PurpleStreet`); FastWork &
+    SafetyFirst ← `Tutorial_Road_111` (a `PhaseStart` choice pair, but the messy multi-setter var
+    isn't cleanly attributable, so only the mission is surfaced)."""
+    try:
+        with open(lua_path, encoding="utf-8", errors="replace") as fh:
+            txt = fh.read()
+    except OSError:
+        return {}
+    mission_info, stage_to_missions = build_mission_index(xml_dir, dic)
+    out = {}
+    parts = re.split(r"\nfunction (MissionResult_Custom_\w+)", txt)
+    for i in range(1, len(parts), 2):
+        stage, body = parts[i][len("MissionResult_Custom_"):], parts[i + 1]
+        ids = set(re.findall(r"CompanyMasteries/(\w+)/Opened'\s*,\s*true", body))
+        missions = stage_to_missions.get(f"{stage.lower()}.stage")
+        if not ids or not missions:
+            continue
+        rep = min((mission_info[m] for m in missions), key=lambda mi: (mi["level"] or 999))
+        for mid in ids:
+            out.setdefault(mid, rep["title"])       # first (earliest-level) mission wins
+    return out
+
+
 # Outcome-gated opened-groups: the mastery you're awarded is decided by **battle outcome /
 # positioning**, not a dialogue menu, so there's no `<Choice>` to hang the grants/opens on and no
 # dictionary string names the outcome. Author the labels (lifted from the mission's objective text

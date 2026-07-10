@@ -3,6 +3,13 @@
 Open / deferred items for the extractor + web tool. (Status: ☐ open · ◐ partial · ✓ done-for-reference.)
 
 ## Items & crafting
+- ☐ **Mission mail rewards (`GiveSystemMail*`).** `missionResult_Custom.lua` delivers per-mission
+  rewards via **system mail** — `dc:GiveSystemMailOneKey(company, '<MailId>')` (×10) and one
+  parameterised `dc:GiveSystemMail(...)`. The mail bodies live in `SystemMail.xml`, several carrying
+  `AttachItem`/`AttachItemCount` (e.g. `VHPD_Reward_Wanted_Hansando`, `MissionClear_Tutorial_PurpleBackStreet`),
+  and `Kim01` delivers a `Statement_Mastery` item by call arg. Surface these as a per-mission
+  **reward** channel once the items model exists (they resolve to item ids, so this rides on the
+  unique-items / equipment work below). Found during the `missionResult_Custom.lua` mining.
 - ☐ **Unique items + their sources.** Add data/UI for unique (high-grade/legendary) items and
   where each comes from. Sources are twofold: **boss/enemy drops** and **crafted at high
   mastery** (crafter expertise level). Likely data: `Item.xml` (grade/rarity), enemy loot/drop

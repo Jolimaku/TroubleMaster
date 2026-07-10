@@ -34,7 +34,8 @@ import resolve_desc
 from resolve_desc import (resolve_description, stat_summary, describe_buff, immune_debuff_summary,
                           neutralize_field_summary, strip_refs, ref_markup)
 from missions import build_enemy_missions, missions_for, dialog_labels_for, TIER_RANK
-from dialog_map import build_dialog_map, mastery_grants, mastery_opens, parse_mission_opens
+from dialog_map import (build_dialog_map, mastery_grants, mastery_opens, parse_mission_opens,
+                        company_opens)
 from quests import build_quests, quest_missions
 
 
@@ -286,6 +287,20 @@ def technique_initial(xml):
     if not os.path.exists(path):
         return set()
     return {c.get("name") for c in idspace(path, "Technique").findall("class")
+            if c.get("Opened") == "true" and c.get("name")}
+
+
+def company_initial(xml):
+    """{company-mastery id} for **player** company policies available from the start — their
+    `SetCompanyMastery.xml` entry is `Opened="true"` (`IsInitMastery="true"`): Scavenger, Expertise,
+    CustomerSatisfaction, SenseOfBelonging, Individualism. The other 3 player policies (HardFight,
+    FastWork, SafetyFirst) carry no init flag — they're unlocked by a story mission (see
+    `dialog_map.company_opens`). (The `Organization`-category masteries in the same tab are NPC-static
+    org traits, not player-obtainable, so they get no player source.)"""
+    path = os.path.join(xml, "SetCompanyMastery.xml")
+    if not os.path.exists(path):
+        return set()
+    return {c.get("name") for c in idspace(path, "SetCompanyMastery").findall("class")
             if c.get("Opened") == "true" and c.get("name")}
 
 
@@ -1378,6 +1393,15 @@ def main():
     # available from the start: Technique Opened="true" (pre-researched) — e.g. Learning.
     for mid in technique_initial(xml):
         sources[mid].append({"type": "Initial"})
+
+    # player company policies (Company-category, the adoptable ones — not the NPC-static Organization
+    # traits in the same tab): 5 available from the start (SetCompanyMastery Opened="true"), 3 unlocked
+    # by a story mission (missionResult_Custom CompanyMasteries/<id>/Opened). Fills their orphan gap.
+    for mid in company_initial(xml):
+        sources[mid].append({"type": "Initial"})
+    for mid, mission in company_opens(
+            os.path.join(a.data, "script", "server", "missionResult_Custom.lua"), xml, dic).items():
+        sources[mid].append({"type": "Story", "mission": mission})
 
     # research-unlock chain: a mastery is unlocked by *crafting* (researching) the mastery whose
     # UnLockTechnique points to it (e.g. King's Wealth ← Treasure Island ← AliBaba ← Treasure

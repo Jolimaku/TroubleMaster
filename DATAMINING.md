@@ -312,6 +312,22 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   to `1` (= the `None` reward) and nothing ever sets it to the Mastery index, so `lobby.lua`'s
   `dc:AcquireMastery` for it never runs. (The division `<Reward>`/`<Section>` data drives the live
   area-**reputation** Vill bonuses, not this dead mastery grant.)
+- **Company policies** (`group:"company"` — the tab merges two categories). The **8 `Company`**
+  masteries are the *player*-adoptable company policies; the **~20 `Organization`** masteries in the
+  same tab are **NPC-static** (the policy an enemy org gives its members) and get **no player source** —
+  their **`Type` already names the owning org** (Street Thug, Smuggler, VHPD, White Tiger, Skull, …),
+  so "used by whom" is inherent, nothing to source.
+  The 8 = exactly `SetCompanyMastery.xml`, sourced two ways: **5 available from the start**
+  (`company_initial` — `SetCompanyMastery` `Opened="true"`/`IsInitMastery="true"`: Scavenger,
+  Expertise, CustomerSatisfaction, SenseOfBelonging, Individualism) → the same `Initial` source as
+  above; **3 unlocked by a story mission** (`dialog_map.company_opens` — `missionResult_Custom.lua`
+  `dc:UpdateCompanyProperty(company, 'CompanyMasteries/<id>/Opened', true)`, a **different** path from
+  the unit `Technique/<id>/Opened`): HardFight ← *Magenta Street* (`Tutorial_PurpleStreet`),
+  FastWork & SafetyFirst ← *Iron Forest Resource Management* (`Tutorial_Road_111`, a `PhaseStart`
+  choice pair — but that multi-setter var isn't cleanly attributable, so only the mission is shown).
+  These are **purely opened** (adoptable policy — no `AcquireCompanyMastery`/grant/copy exists), but
+  reuse the plain `Story` source for display. All 8 were otherwise **sourceless** (and slipped the
+  orphan tripwire, which only checks `normal`/`module` groups).
 - **Mastery-research unlock** (`technique_data` → `research:[prereq names]`): a mastery is unlocked
   by **crafting/researching** another mastery — `Technique.xml` `UnLockTechnique` links X → Y
   (researching X unlocks Y for research). The unlock is tied to the **act of crafting** the prereq
