@@ -1343,7 +1343,7 @@ def main():
     mission_opens = parse_mission_opens(
         os.path.join(a.data, "script", "server", "missionResult_Custom.lua"))
     opens_titles = mastery_opens(mission_opens, xml, dic)
-    for mid, grants in mastery_grants(xml, stage_dir, dic).items():
+    for mid, grants in mastery_grants(xml, stage_dir, dic, mission_opens).items():
         for g in grants:
             src = {"type": "Story", "mission": g["mission"], "choice": g["choice"],
                    "scenario": g.get("scenario")}

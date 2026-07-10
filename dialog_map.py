@@ -331,6 +331,11 @@ def _gated_consequences(stage_root, namer, dic, grants=None, opens_entry=None):
     # opened-for-research companions, but only for choice-gated missions (see docstring)
     companions = (opens_entry["companions"]
                   if opens_entry and opens_entry["branch_vars"] <= choice_vars else {})
+    # Lua's authoritative choice→grant map: pins each grant to its own choice key, overriding a
+    # stage whose award scenes don't separate by choice (Hansol St, see mastery_grants docstring)
+    lua_key = {mid: key
+               for key, mid in (opens_entry["grants_by_choice"].items() if opens_entry else ())
+               if key[0] in choice_vars and key in choice_text}
     # objective-progress variables: a variable a trigger sets *while gated on an objective event* is
     # itself an objective flag (e.g. Road_111 sets Win=1 only when all fences are repaired / the team
     # retreats). A Win/Fail gated on one is the objective being met, not the choice — so it's not
@@ -384,8 +389,11 @@ def _gated_consequences(stage_root, namer, dic, grants=None, opens_entry=None):
                 if c.get("Type") == "VariableTest" and c.get("Operation") == "Equal":
                     out.setdefault((c.get("Variable"), c.get("Value")), []).extend(descs)
         if mastery_descs:
-            for key in _trigger_choice_keys(t, choice_text, choice_vars, producers):
-                out.setdefault(key, []).extend(mastery_descs)
+            default_keys = _trigger_choice_keys(t, choice_text, choice_vars, producers)
+            for desc in mastery_descs:            # a Lua-mapped grant keys off its own choice, not
+                mid = desc[2] if len(desc) > 2 else None   # the trigger's (possibly conflated) keys
+                for key in ([lua_key[mid]] if mid in lua_key else default_keys):
+                    out.setdefault(key, []).append(desc)
     # opened-for-research companions, added per choice once every grant is placed: the choice that
     # awards a group member opens the *other* members. Suppress any companion already granted under
     # the same choice — some stages credit two group members to one option (Hansol St's Heixing pick),
@@ -1360,13 +1368,18 @@ def render_script(stage_root, namer, dic):
     return out
 
 
-def mastery_grants(xml_dir, stage_dir, dic):
+def mastery_grants(xml_dir, stage_dir, dic, mission_opens=None):
     """{mastery id -> [{mission, choice}]}: masteries a story mission awards, with the dialogue
     choice (text) that gates the award — or choice=None for an unconditional mission reward.
     This is the 'Story' source channel for the masteries tab; the *same* grants are highlighted
     in the Dialogue tab by build_dialog_map (both read _direct_mastery_grants). Only stages that
-    map to a real mission are considered, so the duplicate *Test maps are ignored."""
+    map to a real mission are considered, so the duplicate *Test maps are ignored.
+    `mission_opens` (parse_mission_opens) supplies the authoritative Lua choice→grant map, used to
+    correct a stage whose award scenes don't cleanly separate by choice — Hansol St's win cutscenes
+    fire on *who dies* (both ORing over TeamID), so the stage alone pins both team masteries to one
+    option; the Lua keys each cleanly on TeamID (1→Breakthrough, 2→Wanderer)."""
     mission_info, stage_to_missions = build_mission_index(xml_dir, dic)
+    opens_by_stage = {k.lower(): v for k, v in (mission_opens or {}).items()}
     out = {}
     for f in glob.glob(os.path.join(stage_dir, "*.stage")):
         missions = stage_to_missions.get(os.path.basename(f).lower())
@@ -1386,7 +1399,13 @@ def mastery_grants(xml_dir, stage_dir, dic):
         # a stage can map to >1 mission (e.g. Firefly Park + …_Roster) with the scenario on only one
         scenario = next((mission_info[m].get("scenario") for m in missions
                          if mission_info[m].get("scenario")), None)
-        seen = set()                          # (mastery, choice) dedupe within this stage
+        # Lua's clean choice→grant map for this stage (only single-choice-var branches whose choice
+        # text we can resolve) — authoritative, overrides the stage-derived choice for those masteries
+        opens_entry = opens_by_stage.get(os.path.basename(f)[:-len(".stage")].lower())
+        lua_choice = {mid: choice_text[key]
+                      for key, mid in (opens_entry["grants_by_choice"].items() if opens_entry else ())
+                      if key[0] in choice_vars and key in choice_text}
+        stage_grants = {}                     # mastery -> set(choice text) awarded in this stage
         for tr in r.iter("Trigger"):
             mids = set()
             for a in tr.iter("Action"):
@@ -1397,12 +1416,14 @@ def mastery_grants(xml_dir, stage_dir, dic):
             choices = [choice_text[k] for k in
                        _trigger_choice_keys(tr, choice_text, choice_vars, producers)]
             for mid in mids:
-                for choice in (choices or [None]):
-                    if (mid, choice) in seen:
-                        continue
-                    seen.add((mid, choice))
-                    out.setdefault(mid, []).append(
-                        {"mission": title, "choice": choice, "scenario": scenario})
+                stage_grants.setdefault(mid, set()).update(choices or [None])
+        for mid, ch in lua_choice.items():    # Lua wins the choice attribution where it's definitive
+            if mid in stage_grants:
+                stage_grants[mid] = {ch}
+        for mid, choices in stage_grants.items():
+            for choice in choices:
+                out.setdefault(mid, []).append(
+                    {"mission": title, "choice": choice, "scenario": scenario})
     return out
 
 
@@ -1417,6 +1438,9 @@ def parse_mission_opens(lua_path):
         'opened':      set(mid),                       # every mastery the mission opens
         'companions':  {granted_mid: set(opened_mid)}, # per branch: opens to show beside a grant
         'branch_vars': set(stage-variable name),       # the stage vars gating this mission's branches
+        'grants_by_choice': {(var, val): granted_mid}, # branches gated on ONE var==val — the clean,
+                                                       # authoritative choice→grant map (the Lua is the
+                                                       # real grant; the stage MasteryAcquired is a toast)
     }}. Obfuscated string literals (all rendered as 'l') are skipped."""
     try:
         with open(lua_path, encoding="utf-8", errors="replace") as fh:
@@ -1438,19 +1462,22 @@ def parse_mission_opens(lua_path):
         branch_vars = set(re.findall(r"missionValue_(\w+)\s*==", body)) & stage_vars
         # walk statements, grouping the consecutive Acquire/Open calls that sit inside one branch
         # block (delimited by if/elseif/else/end) — the grant and the opens it pairs with
-        companions, opened = {}, set()
-        grp_grant, grp_open = [], []
+        companions, opened, grants_by_choice = {}, set(), {}
+        grp_grant, grp_open, grp_conds = [], [], []
 
         def flush():
             for m in grp_grant:
                 companions.setdefault(m, set()).update(grp_open)
+                if len(grp_conds) == 1:            # branch decided by exactly one var==val
+                    grants_by_choice[grp_conds[0]] = m
             opened.update(grp_open)
 
         for line in body.splitlines():
             s = line.strip()
             if re.match(r"(if|elseif|else|end)\b", s):
-                flush()
-                grp_grant, grp_open = [], []
+                flush()                            # close the prior branch, open a new one whose
+                grp_grant, grp_open = [], []        # conditions are this if/elseif line's var==val tests
+                grp_conds = re.findall(r"missionValue_(\w+)\s*==\s*(\w+)", s)
             mg = re.search(r"AcquireMastery\(company,\s*'(\w+)'", s)
             if mg and mg.group(1) != "l":
                 grp_grant.append(mg.group(1))
@@ -1459,7 +1486,8 @@ def parse_mission_opens(lua_path):
                 grp_open.append(mo.group(1))
         flush()
         if opened:
-            out[stage] = {"opened": opened, "companions": companions, "branch_vars": branch_vars}
+            out[stage] = {"opened": opened, "companions": companions,
+                          "branch_vars": branch_vars, "grants_by_choice": grants_by_choice}
     return out
 
 

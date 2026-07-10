@@ -282,10 +282,20 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
       = wipe-vs-flee, `Irene_Win` = rescue-vs-fall), not a `<Choice>`, so it's left out of the
       Dialogue tab here (still gets the Masteries-tab note) — a nested "outcome" tier under the
       character pick is the planned Phase 2. **Silverlining** likewise surfaces no `<Choice>`
-      (`SelectionPlayType` isn't choice-set) so it too is Masteries-tab-only. A **post-pass**
-      suppresses `Opens X` for any companion already `Grants X` under the *same* choice — **Hansol
-      Street** credits both team masteries to the one "Heixing" option (a pre-existing grant-attribution
-      quirk), where an opens-line would be redundant.
+      (`SelectionPlayType` isn't choice-set) so it too is Masteries-tab-only.
+    - **Lua choice→grant override (`grants_by_choice`).** The `.stage` `MasteryAcquired` markers are
+      only a **toast** (wrapped in `EnableIf TestCompanyTechniqueNotOpened`); the real grant is the Lua
+      `dc:AcquireMastery`. Where a stage's award scenes don't cleanly separate by choice, the Lua does:
+      **Hansol Street**'s win cutscenes fire on *who dies* (each ORing over both `TeamID` values), so
+      `_trigger_choice_keys` alone pinned **both** team masteries to the one "Heixing" option. So
+      `parse_mission_opens` also records each branch gated on **exactly one** `var==val` as
+      `grants_by_choice[(var,val)] → granted_mid` (Hansol: `TeamID` 1→Breakthrough, 2→Wanderer); both
+      `mastery_grants` (Masteries-tab choice) and `_gated_consequences` (Dialogue-tab grant key) let
+      that map **override** the stage attribution for those masteries — correcting Hansol Street on
+      both surfaces. Multi-var branches (Stop and Look Back's `SionPhase01 AND AlbusPhase01`) and
+      outcome-var branches (Sky-wind park) are **not** recorded, so they stay stage-driven. A
+      **post-pass** still suppresses `Opens X` for any companion already `Grants X` under the same
+      choice, as a general safety net.
 - **Available from the start** (`technique_initial`, `initial:true`): a mastery whose `Technique.xml`
   entry is `Opened="true"` is pre-researched — usable from the start with no enemy-analysis/research.
   **~30** such (Learning, the `Resistance1` set, the basic drone `Module_*`, the `TrainingManual`s);
