@@ -276,13 +276,20 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
       for research even if not awarded)" note. Applies to **all 6** missions. (2) *Dialogue tab* —
       an `○ Opens X for research` consequence beside the `★ Grants` on each choice (`_gated_consequences`
       rides the existing grant attribution: the choice that grants a member opens its companions).
-    - **Choice-gated vs outcome-gated.** The Dialogue-tab opens are emitted **only when the mission's
-      `branch_vars ⊆ choice_vars`** — i.e. the group is decided by a dialogue menu. **Sky-wind park**
-      is the exception: its groups hinge on **battle outcome** (`Sion_Allelimination`/`Sion_Escape`
-      = wipe-vs-flee, `Irene_Win` = rescue-vs-fall), not a `<Choice>`, so it's left out of the
-      Dialogue tab here (still gets the Masteries-tab note) — a nested "outcome" tier under the
-      character pick is the planned Phase 2. **Silverlining** likewise surfaces no `<Choice>`
-      (`SelectionPlayType` isn't choice-set) so it too is Masteries-tab-only.
+    - **Choice-gated vs outcome-gated → the outcome tier (`OUTCOME_GROUPS`).** The Dialogue-tab opens
+      that ride a real `<Choice>` are emitted only when `branch_vars ⊆ choice_vars`. Two missions
+      instead decide the award by **outcome**, not a menu, so they get **synthetic "outcome"
+      decisions** (`_inject_outcome_decisions`): **Sky-wind park** — battle outcome
+      (`Sion_Allelimination`/`Sion_Escape` = defeat-all-vs-leave-park, `Irene_Win` = defeat-Luna-vs-
+      don't-give-up) **nested under** the `PlayerSelect` character pick (the traced grant chips it
+      lumped on the Sion/Irene picks are stripped and shown split under the outcomes); **Silverlining**
+      — positioning (who reaches the office phone to contact the VHPD, or destroying all jammers;
+      `SelectionPlayType`), a **top-level** decision since the mission surfaces no `<Choice>` at all.
+      Grants/opens come from `parse_mission_opens` (`grants_by_choice`/`companions`); the outcome
+      **labels are authored** (`OUTCOME_GROUPS`, en/kor, lifted from the mission's objective text where
+      one exists — "Defeat Delivery brother" / "Leave the park" / "Defeat Luna" / "Don't give up") and
+      also replace the stage-traced pick / bare "mission reward" as the **Masteries-tab** Story choice
+      (`outcome_labels`).
     - **Lua choice→grant override (`grants_by_choice`).** The `.stage` `MasteryAcquired` markers are
       only a **toast** (wrapped in `EnableIf TestCompanyTechniqueNotOpened`); the real grant is the Lua
       `dc:AcquireMastery`. Where a stage's award scenes don't cleanly separate by choice, the Lua does:
@@ -963,6 +970,11 @@ Conversations **chain**: when a choice triggers a scene that presents the next
 choice, that follow-up decision is nested under the option (recursively), so a
 multi-step exchange reads as one tree instead of separate decisions. Only the root
 decision shows at top level; follow-ups appear under the choice that leads to them.
+A parent option's consequence badges are **de-duplicated against its nested subtree**
+(`_dedup_nested_consequences`): the option's flattened list drops any badge that a
+decision rendered below it already shows per sub-choice (identity = kind + text +
+mastery/buff id), so e.g. Sky-wind park's Anne pick no longer repeats the Dorori/Anne
+effects its "What should I do…" sub-choices detail — nothing is lost, only un-repeated.
 Within a decision, options that are **fully equivalent** — the same consequence *and*
 the same triggered rules — are grouped into a single entry (bulleted, accent-bordered)
 showing that consequence/script once; options that share a consequence but trigger

@@ -1432,6 +1432,13 @@ def mastery_grants(xml_dir, stage_dir, dic, mission_opens=None):
         for mid, ch in lua_choice.items():    # Lua wins the choice attribution where it's definitive
             if mid in stage_grants:
                 stage_grants[mid] = {ch}
+        # outcome-gated missions: replace the stage-traced pick / bare reward with the authored
+        # outcome label (matches the Dialogue tab's outcome tier — e.g. "Leave the park")
+        if opens_entry:
+            stage_base = os.path.splitext(os.path.basename(f))[0]
+            for mid, label in outcome_labels(stage_base, opens_entry["grants_by_choice"], dic).items():
+                if mid in stage_grants:
+                    stage_grants[mid] = {label}
         for mid, choices in stage_grants.items():
             for choice in choices:
                 out.setdefault(mid, []).append(
@@ -1519,6 +1526,127 @@ def mastery_opens(mission_opens, xml_dir, dic):
         for mid in info["opened"]:
             out.setdefault(mid, set()).add(rep["title"])
     return out
+
+
+# Outcome-gated opened-groups: the mastery you're awarded is decided by **battle outcome /
+# positioning**, not a dialogue menu, so there's no `<Choice>` to hang the grants/opens on and no
+# dictionary string names the outcome. Author the labels (lifted from the mission's objective text
+# where one exists) keyed by the branch's `(var, value)`; grants/opens come from parse_mission_opens'
+# `grants_by_choice`/`companions`. `parent_var`/`parent_val` nest the outcomes under a real character
+# pick (Sky-wind park's PlayerSelect); `parent_var=None` makes a top-level decision (Silverlining,
+# which surfaces no dialogue choice at all). Each outcome: (var, value, parent_val, en, kor).
+OUTCOME_GROUPS = {
+    "Tutorial_SkyWindPark": {
+        "prompt": ("Battle outcome", "전투 결과"),
+        "parent_var": "PlayerSelect",
+        "outcomes": [
+            ("Sion_Allelimination", "1", "2", "Defeat Delivery brother", "배달 형제 제압"),
+            ("Sion_Escape", "1", "2", "Leave the park", "공원 이탈"),
+            ("Irene_Win", "1", "3", "Defeat Luna", "루나 제압"),
+            ("Irene_Win", "2", "3", "Don't give up", "포기하지 않음"),
+        ],
+    },
+    "Tutorial_Silverlining": {
+        "prompt": ("Mission outcome", "미션 결과"),
+        "parent_var": None,
+        "outcomes": [
+            ("SelectionPlayType", "1", None, "Don contacts the VHPD", "돈이 발할라 경찰청에 연락"),
+            ("SelectionPlayType", "2", None, "Albus contacts the VHPD", "알버스가 발할라 경찰청에 연락"),
+            ("SelectionPlayType", "3", None, "Destroy the jammers", "전파 방해기 파괴"),
+        ],
+    },
+}
+
+
+def outcome_labels(stage_base, grants_by_choice, dic):
+    """{granted mid -> localized outcome label} for an outcome-gated mission — for the Masteries-tab
+    Story choice (replacing the stage-traced character pick / bare 'mission reward')."""
+    spec = OUTCOME_GROUPS.get(stage_base)
+    if not spec:
+        return {}
+    out = {}
+    for var, val, _parent, en, kor in spec["outcomes"]:
+        mid = grants_by_choice.get((var, val))
+        if mid:
+            out[mid] = _L(dic, en, kor)
+    return out
+
+
+def _mastery_cons(dic, gmid, companions):
+    """Grant + opened consequence dicts for an outcome that awards `gmid` and opens its companions —
+    the same shape _cons_dict emits, so app.js re-localizes them from the mastery id."""
+    t = _mastery_title(dic, gmid)
+    cons = [{"kind": "mastery", "text": _L(dic, f"Grants {t}", f"{t} 획득"), "mastery": gmid}]
+    for cid in sorted(companions.get(gmid, ())):
+        ct = _mastery_title(dic, cid)
+        cons.append({"kind": "opened",
+                     "text": _L(dic, f"Opens {ct} for research", f"{ct} 연구 해금"), "mastery": cid})
+    return cons
+
+
+def _dedup_nested_consequences(decisions):
+    """Drop a consequence badge from a parent option when a decision nested **below** it (via
+    `leads_to`, any depth) already shows the same badge — the nested view attributes it to the
+    specific sub-choice, so repeating it in the parent's flattened list is noise (e.g. Sky-wind
+    park's Anne pick lists Dorori/Anne effects that its 'What should I do…' sub-choices detail; the
+    relocated outcome grant chips likewise). Identity is (kind, text, mastery, buff)."""
+    def cid(c):
+        return (c["kind"], c["text"], c.get("mastery"), c.get("buff"))
+
+    def below(di, seen):
+        if di in seen:
+            return set()
+        seen.add(di)
+        out = set()
+        for o in decisions[di]["options"]:
+            out |= {cid(c) for c in o.get("consequences", ())}
+            for ci in o.get("leads_to", ()):
+                out |= below(ci, seen)
+        return out
+
+    for dec in decisions:
+        for o in dec["options"]:
+            if not o.get("leads_to"):
+                continue
+            nested = set().union(*(below(ci, set()) for ci in o["leads_to"]))
+            if nested:
+                o["consequences"] = [c for c in o["consequences"] if cid(c) not in nested]
+
+
+def _inject_outcome_decisions(stage_base, opens_entry, decisions, dic):
+    """Add synthetic 'outcome' decisions for an outcome-gated opened-group (OUTCOME_GROUPS). Each
+    outcome becomes an option carrying its grant + opens; the group nests under the parent character
+    pick (`leads_to`) or, with no parent, becomes a top-level decision. When nesting, the grant/open
+    chips the parent pick showed by state-tracing (Sky-wind park lumps both Sion masteries on the
+    Sion pick) are stripped, since the outcome tier now shows them split correctly."""
+    spec = OUTCOME_GROUPS.get(stage_base)
+    if not spec or not opens_entry:
+        return
+    gbc, companions = opens_entry["grants_by_choice"], opens_entry["companions"]
+    parent_var = spec["parent_var"]
+    # group the authored outcomes by the parent pick they sit under (None → one top-level group)
+    by_parent = {}
+    for var, val, parent_val, en, kor in spec["outcomes"]:
+        by_parent.setdefault(parent_val, []).append((var, val, en, kor))
+    for parent_val, outs in by_parent.items():
+        options = []
+        for var, val, en, kor in outs:
+            gmid = gbc.get((var, val))
+            if not gmid:
+                continue
+            options.append({"text": _L(dic, en, kor), "sets": [], "triggers": [],
+                            "consequences": _mastery_cons(dic, gmid, companions), "leads_to": []})
+        if not options:
+            continue
+        idx = len(decisions)
+        decisions.append({"prompt": _L(dic, *spec["prompt"]), "options": options,
+                          "is_child": parent_var is not None, "shown_by": []})
+        if parent_var is None:
+            continue
+        for dec in decisions:                     # nest under the matching character-pick option;
+            for o in dec["options"]:              # the relocated chips are then deduped off the pick
+                if f"{parent_var}={parent_val}" in (o.get("sets") or []):
+                    o.setdefault("leads_to", []).append(idx)
 
 
 def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None, mission_opens=None):
@@ -1700,6 +1828,11 @@ def build_dialog_map(xml_dir, stage_dir, dic, monster_name, quest_names=None, mi
                 child |= leads
         for di, dec in enumerate(decisions):
             dec["is_child"] = di in child
+        # synthesize outcome-tier decisions (Sky-wind park / Silverlining) after is_child is set —
+        # they carry their own is_child + parent leads_to (see _inject_outcome_decisions)
+        _inject_outcome_decisions(os.path.splitext(os.path.basename(f))[0], opens_entry, decisions, dic)
+        # then drop consequence badges a nested decision already shows from its parent option
+        _dedup_nested_consequences(decisions)
         for dec in decisions:                     # internal-only fields, not for the web payload
             dec.pop("scene_key", None)
             for o in dec["options"]:

@@ -52,26 +52,22 @@ Open / deferred items for the extractor + web tool. (Status: ☐ open · ◐ par
 ## Dialogue tab
 - ☐ **Continue clarity passes.** Keep reviewing the rendered dialogue/script output for
   confusing or wrong labels and tighten the wording.
-- ☐ **Phase 2: outcome-tier view for Sky-wind Park + Silverlining.** Two opened-group missions are
-  **outcome-gated** (decided by how you play the fight, not a dialogue menu), so they're currently
-  Masteries-tab-only. Build a synthetic "outcome" representation with **authored** labels (en/kor),
-  keyed by `(mission, var, value)` — no dictionary string exists for these outcomes. Also fixes the
-  odd Masteries-tab wording (they render as "(mission reward)"/choice=None next to the "even if not
-  awarded" note); the authored outcome label should replace that.
-  - **Sky-wind park** (*Ch4 Scent of the Past*): has a parent character pick (`PlayerSelect`, a real
-    choice), then a **nested** outcome branch — Sion pick → {`Sion_Allelimination` wipe → Grants
-    Hysterie/Opens TacticalRetreat | `Sion_Escape` flee → reverse}; Irene pick → {`Irene_Win==1`
-    rescue (Luna falls) → Grants HeroResponsibility/Opens HeroDontGiveUp | `==2` Irene falls →
-    reverse}. Each outcome has its own cutscene (`Win_Sion_AllElimination`/`Win_Escape`/
-    `Win_Irene_Luna`/`Win_Irene_Luna_Lose`). Waiting & ColdRefusal are granted-only (no open).
-  - **Silverlining** (*Silver Cloud St 356*): **no** parent choice — a **top-level** synthetic outcome
-    decision. `SelectionPlayType` set by tactics/positioning: Don on the phone tile (40,51,6,
-    `Occupy==Don`) `=1`→Supporter; Albus (`Occupy==Albus`) `=2`→Alacrity; all jammers destroyed first
-    `=3`→HighSpeed. ⚠️ **Verify the action wording is "calls the police" (VHPD call) vs "answers the
-    phone"** against the `VHPDCall_Don`/`VHPDCall_Albus` scene text at label time.
-  - Shared infra: detect the outcome axis (non-choice var gating a grant, optionally nested under a
-    choice), a synthetic outcome-decision node, and a `(mission,var,value)`→en/kor label table (like
-    `ACHIEVEMENT_GRANTS`). `parse_mission_opens` already yields the per-outcome grant/open mapping.
+- ✓ *(done)* **Phase 2: outcome-tier view for Sky-wind Park + Silverlining.** Two opened-group
+  missions decide the award by **outcome**, not a dialogue menu, so they now get **synthetic
+  "outcome" decisions** (`dialog_map._inject_outcome_decisions`, driven by the authored `OUTCOME_GROUPS`
+  table — en/kor labels lifted from the mission objective text where one exists; grants/opens from
+  `parse_mission_opens`).
+  - **Sky-wind park**: outcomes **nested under** the `PlayerSelect` character pick — Sion → *Defeat
+    Delivery brother* (Hysterie / opens Tactical Retreat) | *Leave the park* (Tactical Retreat / opens
+    Hysterie); Irene → *Defeat Luna* (Hero's Responsibility / opens A Hero Never Gives Up) | *Don't
+    give up* (A Hero Never Gives Up / opens Hero's Responsibility). The traced grant chips that were
+    lumped on the Sion/Irene picks are **stripped** and shown split under the outcomes; Anne/Ray keep
+    their single granted-only masteries (Waiting/ColdRefusal).
+  - **Silverlining**: a **top-level** outcome decision (the mission surfaces no `<Choice>`) — *Don
+    contacts the VHPD* (Supporter) | *Albus contacts the VHPD* (Alacrity) | *Destroy the jammers*
+    (HighSpeed), each opening the other two.
+  - The authored labels also replace the stage-traced pick / bare "mission reward" as the
+    **Masteries-tab** Story choice (`outcome_labels`).
 - ☐ **Mine `missionResult_Custom.lua` for other surfaceable content.** The per-mission post-battle
   result handlers held the "opened for research" channel and the authoritative grant→choice map.
   Survey the rest for other player-meaningful outcomes worth surfacing: `Progress/Character/*`
