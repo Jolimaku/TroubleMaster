@@ -1583,6 +1583,10 @@
     if (pc) {
       if (pc.pcType) s.add(pc.pcType); if (pc.race) s.add(pc.race);
       if (pc.element) s.add(pc.element);              // raw MasteryType id (e.g. drone SP "Heat")
+      // Control/Reinforcement Program modules (typeRaw Application_Control/_Enhancement) aren't
+      // gated by the drone's SP or a job — they're board-placeable on every drone. Expose them so
+      // bldAccessible lets those module-group masteries (and their sets) through.
+      if (pc.race === "Machine") { s.add("Application_Control"); s.add("Application_Enhancement"); }
     }
     if (job) (job.accessTypes || []).forEach(t => s.add(t));
     return s;
@@ -1688,8 +1692,16 @@
     const out = { pcId: pc ? b.pcId : null, level: Math.max(1, +b.level || 1),
       jobId: pc ? (pc.jobs.includes(b.jobId) ? b.jobId : pc.jobs[0]) : null,
       placed: {}, os: null, reinf: Math.min(4, Math.max(1, +b.reinf || 1)), craft: null, evo: [] };
-    BOARD_CATS.forEach(c => {                           // drop anything that no longer exists / fits
-      const arr = (b.placed && b.placed[c] || []).filter(id => masteryById[id] && slotOf(masteryById[id]) === c);
+    // gate placed masteries the same way as the sidebar/interactive switch: they must still exist,
+    // still map to their column, AND be accessible to the current form/class (bldAccessTypes). This
+    // is the single enforcement point every load/import/canon path shares, so a build stored with a
+    // now-incompatible mastery (e.g. from an older data set or a share code) heals on load.
+    const ntypes = pc ? bldAccessTypes(pc, jobById[out.jobId]) : null;
+    BOARD_CATS.forEach(c => {                           // drop anything that no longer exists / fits / isn't accessible
+      const arr = (b.placed && b.placed[c] || []).filter(id => {
+        const m = masteryById[id];
+        return m && slotOf(m) === c && (!ntypes || bldAccessible(m, ntypes, pc));
+      });
       if (arr.length) out.placed[c] = arr;
     });
     out.os = (isDrone(pc) && (MACH.os || []).some(o => o.id === b.os)) ? b.os : (isDrone(pc) ? (MACH.os[0] || {}).id : null);
@@ -1865,9 +1877,11 @@
     const kindOk = dec.rosterType === 2 ? isBeast(pc) : dec.rosterType === 3 ? isDrone(pc) : !!pcById[pcId];
     if (!kindOk) return null;
     const jobId = (dec.jobName && pc.jobs.includes(dec.jobName)) ? dec.jobName : pc.jobs[0];
-    // Every *recognized* mastery must be placeable on this unit. Check against the character's whole type
-    // universe (union over all its classes) so a legit board keeping a mastery from another class isn't
-    // falsely rejected — this only weeds out masteries that don't belong to this character/roster at all.
+    // Every *recognized* mastery must be placeable on this unit. This is only a tolerant plausibility
+    // filter (is the code garbage, or a real build for this character?) — it checks against the whole
+    // type universe (union over all the character's classes) so a code isn't rejected outright over one
+    // cross-class mastery. Strict per-mastery eligibility for the *current* class is enforced later, in
+    // bldNormalized (which every import flows through via bldUse/bldCanonCode), pruning what doesn't fit.
     const types = new Set();
     const jobIds = (pc.jobs || []).filter(jid => jobById[jid]);
     if (jobIds.length) jobIds.forEach(jid => bldAccessTypes(pc, jobById[jid]).forEach(t => types.add(t)));
@@ -2508,6 +2522,23 @@
     // ---- 6th panel: completed + partial mastery sets ----
     bldEls.board.appendChild(renderSetPanel(slotById, setIconsById, types));
 
+    // data-driven mutual exclusion (Mastery.xml ExclusiveMastery): flag any placed pair the game
+    // forbids together (e.g. Warrior's <-> Guardian's Descendant — the only such pair in the game).
+    const placedFlat = BOARD_CATS.flatMap(c => bld.placed[c] || []);
+    const placedSet = new Set(placedFlat);
+    const seenExcl = new Set();
+    placedFlat.forEach(id => {
+      const m = masteryById[id];
+      ((m && m.exclusive) || []).forEach(other => {
+        if (!placedSet.has(other)) return;
+        const key = [id, other].sort().join("|");
+        if (seenExcl.has(key)) return;
+        seenExcl.add(key);
+        broken.push(tf("bld.brokenExclusive", "{a} and {b} can't be equipped together",
+          { a: m.name, b: (masteryById[other] || {}).name || other }));
+      });
+    });
+
     if (totalUsed > limits.total) broken.unshift(tf("bld.brokenTotal", "Total: {n} points over {cap} cap", { n: totalUsed, cap: limits.total }));
     bldEls.summary.textContent = tf("bld.summary", "Training Point {used}/{total}", { used: totalUsed, total: limits.total })
       + (pc.element ? ` · ${typeDisplay[pc.element] || pc.element}` : "") + ` · ${job ? job.title : ""}`;
@@ -2704,11 +2735,39 @@
   // picking the 2nd selector: a PC class, a beast form (evolve), or a drone SP structure
   function bldSelectForm(v) {
     const u = unitById[bld.pcId];
-    if (isDrone(u)) {                                  // switch SP structure — keep the board (re-access)
-      const nu = droneByFrameSp[u.frame + "/" + v];
-      if (nu) bld.pcId = nu.id;
-    } else if (isBeast(u)) bld.pcId = v;               // switch form (evolve) — keep the board
-    else bld.jobId = v;
+    // resolve the form/class the switch would produce, but don't commit until we know whether it
+    // would strip masteries/picks the new form/class can't hold (then we ask for confirmation first).
+    let nextPc = bld.pcId, nextJob = bld.jobId;
+    if (isDrone(u)) { const nu = droneByFrameSp[u.frame + "/" + v]; if (nu) nextPc = nu.id; }  // switch SP structure
+    else if (isBeast(u)) nextPc = v;                   // switch form (evolve)
+    else nextJob = v;                                  // switch class
+    const npc = unitById[nextPc];
+    // same eligibility gate as the sidebar/board (bldAccessTypes with no args = current form/class):
+    // an advanced class's accessTypes already include the basic class it came from, so no separate
+    // "prior classes" union is needed. evo picks use the new unit's evolution / AI-upgrade pool.
+    const types = bldAccessTypes(npc, jobById[nextJob]);
+    const evoPool = new Set(isDrone(npc) ? ((MACH.aiUpgrade || {})[bld.os] || []).map(x => x.id) : beastEvoPool(npc));
+    const dropped = [];
+    BOARD_CATS.forEach(c => (bld.placed[c] || []).forEach(id => {
+      const m = masteryById[id];
+      if (m && !bldAccessible(m, types, npc)) dropped.push(m.name || id);
+    }));
+    (bld.evo || []).forEach(id => {
+      if (id && !evoPool.has(id)) dropped.push((beastEvoById[id] || masteryById[id] || {}).name || id);
+    });
+    if (dropped.length && !confirm(tf("bld.switchConfirm",
+        "Switching will remove {n} mastery/masteries the new form or class can't equip:\n\n{list}\n\nSwitch anyway?",
+        { n: dropped.length, list: dropped.join("\n") }))) {
+      renderBuilder();                                 // cancelled — re-render resets the picker to the current form/class
+      return;
+    }
+    bld.pcId = nextPc; bld.jobId = nextJob;            // commit, then prune what the new form/class can't keep
+    BOARD_CATS.forEach(c => {
+      if (!bld.placed[c]) return;
+      bld.placed[c] = bld.placed[c].filter(id => bldAccessible(masteryById[id], types, npc));
+      if (!bld.placed[c].length) delete bld.placed[c];
+    });
+    bld.evo = (bld.evo || []).map(id => (id && evoPool.has(id)) ? id : "");
     renderBuilder();
   }
   // close any open custom dropdown on an outside click or Esc

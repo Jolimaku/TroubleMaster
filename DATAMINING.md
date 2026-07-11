@@ -480,6 +480,16 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     display `Heating`/`Genetics`/… only differs from the id for a handful of types, which is why
     matching on display names silently worked for PCs/beasts but broke for drones). Accordingly
     `pcs[].pcType`, `jobs[].accessTypes`, and `beasts[].pcType` are emitted as **raw ids**.
+    A job's `accessTypes` is the **prereq closure** (job + all recursive `RequireClassLv` classes),
+    so an advanced class already carries its basic class(es) — e.g. Martial Artist →
+    `[Dancer, Fighter, MartialArtist]`, Sniper → `[Gunman, Sniper]`. This is why there is **no
+    separate "prior classes" concept**: gating on the *current* class's `accessTypes` already keeps
+    the basics it descends from. The builder applies this one gate everywhere — the sidebar list, the
+    interactive form/class switch (`bldSelectForm`, which asks before dropping now-incompatible
+    masteries/evo picks), and `bldNormalized` (the single point every load/import/canon path shares,
+    so a stored/shared build with an incompatible mastery heals on load). The share-code *import gate*
+    is intentionally looser — a tolerant union-over-all-classes plausibility check that accepts the
+    code, then defers strict per-class pruning to `bldNormalized`.
   - **Category** has the same split for the same reason (i18n): each mastery carries `category`
     (localized display, e.g. `개인`) **and** `categoryRaw` — the *English* category title (e.g.
     `Individual` / `Basic` / `Frame`), resolved from the `eng` dictionary even in a non-English
@@ -491,7 +501,18 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   - **Drone access** uses the same engine but is additionally restricted to the **`module`
     group**: a drone's access set also matches plain `Common`/`All`/`Normal` masteries (174 of
     them), which a drone can't actually equip, so the builder filters those out — only the 112
-    module masteries (minus the other-SP ones) reach a drone's sidebar.
+    module masteries (minus the other-SP ones) reach a drone's sidebar. **Two module types are
+    SP-agnostic** and not covered by the element/race/job access set: `Application_Control`
+    (Control Program) and `Application_Enhancement` (Reinforcement Program) — every drone can place
+    them regardless of SP, so `bldAccessTypes` adds both when `race==="Machine"`. (Trap: the raw
+    types `Application_Control`/`_Enhancement` are *also* worn by `group:"individual"` OS
+    reinforcement picks — a different mechanic; the `module`-group filter keeps those off the board.)
+  - **Mutually-exclusive masteries** — `Mastery.xml` has an `ExclusiveMastery` rule
+    (`type="table" subtype="string"`) naming masteries that can't sit on the same board. Only one
+    pair uses it: `DescendantOfWarrior` ⇄ `DescendantOfGuardian` (each lists the other). The
+    extractor emits it as `exclusive: [ids]` (omitted when empty); the builder flags a placed pair
+    via the `broken[]` warning list (it warns, matching the over-cap handling — it doesn't hard-block
+    the click).
   - **Limit-modifier masteries** (curated from `shared_pc.lua`'s `Get_ExtraMax*MasteryCount_PC`
     / `Get_MaxMasteryCost_Shared_PC` lists × each mastery's `Base_ApplyAmount`): slot bonuses
     feed the cost cap via the `2×slots−1` formula — e.g. Self-Examination +1 Basic slot,
@@ -505,9 +526,15 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     `Training` (15, the only "changeable"/re-pickable), `Nature` (18) and `Gene` (22) are **global**
     pools (any species); the `ESP` type is **element-limited** — only masteries whose `Type` equals
     the beast's own element (`Object.ESP`: Fire/Ice/Lightning/Wind/Earth/Water, one each) are eligible.
-    The `BeastUniqueEvolutionMastery` (+`_Genetic`) list (21: `Flight`, `GoldScale`, `Illumination`,
-    the 8 `Munggo_<class>`…) is **excluded** from all global pools and granted only to specific forms
-    via each form's `<FixedEvolutionMastery>` table (`Name`/`Slot`/`Rate`). NB these are picks, not
+    The `BeastUniqueEvolutionMastery` list (`Flight`, `GoldScale`, `Illumination`, the 8
+    `Munggo_<class>`…) is **excluded** from all global pools and granted only to specific forms
+    via each form's `<FixedEvolutionMastery>` table (`Name`/`Slot`/`Rate`) — these are the `unique`
+    ones in the extractor. **Trap:** the separate `BeastUniqueEvolutionMastery_Genetic` list (the 5
+    `GrowthPotential_*` +2-slot picks: Giant Skeleton / Flexible Muscle / Engraved Fighting Spirit /
+    Strong Desire to Survive / Expanded Neuron) is **NOT** unique/form-gated — they're `Type=Gene`,
+    available to *any* beast (the "genetic modification" scope), so they live in the **global Gene
+    pool**, not a form's fixedEvo. `extract_masteries.py` must **not** fold `_Genetic` into
+    `beast_unique` or they vanish from every growth-stage picker. NB these are picks, not
     board placements, and several affect board limits (slots/cost) like human Individual masteries —
     fed into `boardMods` (the `BeastXTraining`/`GrowthPotential`/`AdaptiveTraining`-type ones).
     `beast_availability()` tags each with a player-availability scope (global / element / species /

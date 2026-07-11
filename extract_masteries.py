@@ -700,8 +700,11 @@ def build_builder_data(xml, dic, type_title, board_cat=None, excluded_jobs=()):
     # (Training/Nature/Gene) or element-gated (Type == a Fire/Ice/… element); `unique` ones are
     # excluded from the global pools and offered only via a form's fixedEvo. The app builds each
     # beast's pool from this + the beast's element + form.fixedEvo (so nothing is duplicated per beast).
+    # NOTE: BeastUniqueEvolutionMastery_Genetic (the GrowthPotential_* +2-slot picks) is deliberately
+    # NOT unique — those genetic-modification masteries are Type=Gene and available to *any* beast
+    # (not form-gated), so they belong in the global Gene pool, not a form's fixedEvo.
     beast_unique = set()
-    for idn in ("BeastUniqueEvolutionMastery", "BeastUniqueEvolutionMastery_Genetic"):
+    for idn in ("BeastUniqueEvolutionMastery",):
         for c in idspace(os.path.join(xml, "Beast.xml"), idn).findall("class"):
             beast_unique.add(c.get("name"))
     beast_evo = []
@@ -1543,6 +1546,9 @@ def main():
             "flavor": dic.get(f"Mastery/{n}/FlavorText"),
             "in_sets": mastery_to_sets.get(n, []),
             "sources": sources.get(n, []),
+            # Mastery.xml ExclusiveMastery (table of string): masteries that can't be equipped on the
+            # same board as this one (e.g. Warrior's <-> Guardian's Descendant). Empty for almost all.
+            "exclusive": [x for x in (c.get("ExclusiveMastery") or "").replace(",", " ").split() if x],
             # the ability this mastery grants/modifies (display name), for the Abilities cross-link
             "grantsAbility": dic.get(f"Ability/{c.get('Ability')}/Title")
             if c.get("Ability") not in (None, "None") else None,
@@ -1914,6 +1920,8 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
             wm["research"] = research
         if m.get("grantsAbility"):                 # omit when null (only ~53 of ~1900 carry one)
             wm["grantsAbility"] = m["grantsAbility"]
+        if m.get("exclusive"):                     # mutually-exclusive masteries (rare; e.g. Descendants)
+            wm["exclusive"] = m["exclusive"]
         # orphan tripwire: a board-placeable mastery (normal/module) with no remaining source of any
         # kind. Expected to be empty; a non-empty list after a game update means a new acquisition
         # mechanism (likely a spawn the parser misses) needs investigating — not a silent drop.
