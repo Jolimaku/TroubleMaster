@@ -236,6 +236,7 @@ window.TS_UI = {
   "bld.brokenTotal": "전체: 코스트 {n}이(가) 한도 {cap}을(를) 초과",
   "bld.brokenExclusive": "{a}와(과) {b}은(는) 함께 장착할 수 없습니다",
   "bld.switchConfirm": "전환하면 새 형태 또는 직업이 장착할 수 없는 특성 {n}개가 제거됩니다:\n\n{list}\n\n전환하시겠습니까?",
+  "bld.mimicForm": "{form} ({cls})",
   "bld.masterySet": "추가 특성",
   "bld.noSets": "일치하는 세트 없음",
   "bld.addMissing": "부족한 특성을 빌드에 추가",

@@ -235,6 +235,7 @@ window.TS_UI = {
   "bld.brokenTotal": "Total: {n} points over {cap} cap",
   "bld.brokenExclusive": "{a} and {b} can't be equipped together",
   "bld.switchConfirm": "Switching will remove {n} mastery/masteries the new form or class can't equip:\n\n{list}\n\nSwitch anyway?",
+  "bld.mimicForm": "{form} ({cls})",
   "bld.masterySet": "Mastery Set",
   "bld.noSets": "No matching sets",
   "bld.addMissing": "Add the missing masteries to the build",

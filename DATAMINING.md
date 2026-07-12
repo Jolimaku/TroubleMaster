@@ -513,6 +513,28 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     extractor emits it as `exclusive: [ids]` (omitted when empty); the builder flags a placed pair
     via the `broken[]` warning list (it warns, matching the over-cap handling — it doesn't hard-block
     the click).
+  - **Mungo "Mimic" class access** — Mungos (family `Munggo`) equip a class's masteries via the
+    Mimic mechanic, which isn't a `Type`/`accessTypes` on the unit — it lives in the `Desc_Base` of
+    the `Munggo*` masteries as a grant sentence whose `FormatKeyword` refs are **all** `Idspace="Job"`
+    (the paired substitution sentence mixes in `Idspace="Mastery"` refs — skip it). Two shapes:
+    the base `Munggo` mastery (Category `Job`) has one grant property per weapon, gated by
+    `CaseType="ItemType"` (`BattleGlove→Fighter, LongSword→Swordsman, Dagger→Thief, Pistol→Gunman,
+    TwoHandClub→Warrior, Axe→Marauder, Spray→Thrower, Bangle→Mage`); a named `Munggo_<class>`
+    (Category `Beast`, in a form's `FixedEvolutionMastery`) grants an advanced class + its basics
+    (e.g. `Munggo_Barbarian` → Barbarian/Warrior/Marauder). The extractor resolves each grant's jobs
+    to the union of their `accessTypes` closures and emits per-form:
+    - **advanced** forms (`Mon_Beast_Munggo_<weapon>`, e.g. Black Eyepatch): `mimicAccess` = the
+      `Munggo_<class>` grant;
+    - **basic** mature forms (`Mon_Beast_Munggo_Base_<weapon>`, e.g. Swordsman Mungo): `mimicAccess`
+      = the weapon's basic class (weapon from the id suffix — the only glue not in the data; every
+      suffix equals its `ItemType` except `MartialArtist`→`BattleGlove`);
+    - the weapon-agnostic **adolescent** `Mon_Beast_Munggo_Base`: `mimicChoice: true` (no fixed
+      class). The builder splits it into one Form-dropdown entry per weapon (from the global
+      `mimicWeapons` table) backed by a persisted `mimic` pick, so a board commits to a single class
+      (you can't mix two classes' masteries). `bldAccessTypes` adds `mimicAccess`, or the chosen
+      weapon's class for a `mimicChoice` form; `bldNormalized` prunes anything outside it.
+    Every Mungo form is its own coded roster unit (`MasteryCode.xml` `Beast`), so all are shareable;
+    the `mimic` pick rides the link/localStorage like `evo`, leaving the bare in-game code untouched.
   - **Limit-modifier masteries** (curated from `shared_pc.lua`'s `Get_ExtraMax*MasteryCount_PC`
     / `Get_MaxMasteryCost_Shared_PC` lists × each mastery's `Base_ApplyAmount`): slot bonuses
     feed the cost cap via the `2×slots−1` formula — e.g. Self-Examination +1 Basic slot,

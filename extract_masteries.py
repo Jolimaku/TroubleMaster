@@ -687,6 +687,55 @@ def build_builder_data(xml, dic, type_title, board_cat=None, excluded_jobs=()):
     beasts.sort(key=lambda b: (fam_order.get(b["family"], 99), b["stage"], b["name"]))
     have_forms = {b["family"] for b in beasts}             # drop meta families (e.g. "All") with no forms
     beast_families = [f for f in beast_families if f["id"] in have_forms]
+
+    # ---- Mungo "Mimic" class-mastery access ------------------------------------------------
+    # A Mungo equips a class's masteries via its Mimic: the base "Munggo" mastery grants a *basic*
+    # class chosen by equipped weapon; a named/advanced Mungo (Munggo_<class> Beast mastery) grants
+    # an advanced class (+ its basics). Each grant is a Desc_Base property whose FormatKeyword refs
+    # are ALL Idspace="Job" (the paired mastery-substitution property mixes in Idspace="Mastery"
+    # refs, so it's skipped). mimicAccess = the union of those jobs' accessType closures; the lone
+    # weapon-agnostic base ("Mon_Beast_Munggo_Base", adolescent) is flagged mimicChoice so the app
+    # offers one weapon/class per option (mimicWeapons) instead — you can't equip two classes at once.
+    mcls_all = {c.get("name"): c for c in idspace(os.path.join(xml, "Mastery.xml"), "Mastery").findall("class")}
+    def _grant_jobs(el):                          # advanced grant: the all-Job property's job ids
+        out = []
+        for db in el.findall("Desc_Base"):
+            for p in db.findall("property"):
+                fks = p.findall("FormatKeyword/property")
+                if fks and all(fk.get("Idspace") == "Job" for fk in fks):
+                    for fk in fks:
+                        if fk.get("Key") and fk.get("Key") not in out:
+                            out.append(fk.get("Key"))
+        return out
+    def _access(job_ids):                         # union of each job's accessType closure (raw ids)
+        s = set()
+        for j in job_ids:
+            s |= closure(j)
+        return sorted(s)
+    weapon_job = {}                               # base Munggo: ItemType (weapon) -> basic class job
+    for db in (mcls_all["Munggo"].findall("Desc_Base") if "Munggo" in mcls_all else []):
+        for p in db.findall("property"):
+            fks = p.findall("FormatKeyword/property")
+            if p.get("CaseType") == "ItemType" and p.get("CaseValue") \
+                    and fks and all(fk.get("Idspace") == "Job" for fk in fks):
+                weapon_job[p.get("CaseValue")] = fks[0].get("Key")
+    mimic_weapons = [{"weapon": w, "job": j, "label": type_title.get(j, j), "access": _access([j])}
+                     for w, j in weapon_job.items()]
+    SUFFIX_ITEMTYPE = {"MartialArtist": "BattleGlove"}   # only the glove suffix differs from its ItemType id
+    ADOLESCENT = "Mon_Beast_Munggo_Base"
+    for b in beasts:
+        if b["pcType"] != "Munggo":
+            continue
+        adv = next((m for m in b["fixedEvo"] if m.startswith("Munggo_") and m in mcls_all), None)
+        if adv:                                             # named/advanced form -> advanced class grant
+            b["mimicAccess"] = _access(_grant_jobs(mcls_all[adv]))
+        elif b["id"] == ADOLESCENT:                         # weapon-agnostic base -> pick a weapon/class
+            b["mimicChoice"] = True
+        elif b["id"].startswith(ADOLESCENT + "_"):          # generic mature Base_<weapon> -> basic class
+            suf = b["id"][len(ADOLESCENT) + 1:]
+            j = weapon_job.get(SUFFIX_ITEMTYPE.get(suf, suf))
+            if j:
+                b["mimicAccess"] = _access([j])
     # localized evolution-stage names per EvolutionType, keyed by the form's EvolutionStage
     # (= 1-based property index). Normal = Growth/Adolescent/Mature; EggStart (Draki, egg-hatched)
     # has 4: Babyhood/Growth/Adolescent/Mature. Pulled via keymap so other languages work too.
@@ -752,7 +801,7 @@ def build_builder_data(xml, dic, type_title, board_cat=None, excluded_jobs=()):
     for n in TOTAL_MODS:
         addmod(n, {"kind": "total", "amt": applyamt(n)})
 
-    return jobs, pcs, esp_slots, mods, slot_unlock, beasts, beast_families, beast_stages, beast_evo
+    return jobs, pcs, esp_slots, mods, slot_unlock, beasts, beast_families, beast_stages, beast_evo, mimic_weapons
 
 
 def build_machine_data(xml, dic, type_title, cat_title_en=None):
@@ -1575,7 +1624,7 @@ def main():
 
     # board-builder data: jobs (grade 1-2) + playable characters + limit modifiers
     board_cat = {m["id"]: m["category_en"] for m in masteries}   # English engine cat (matches board columns)
-    jobs, pcs, esp_slots, board_mods, slot_unlock, beasts, beast_families, beast_stages, beast_evo = \
+    jobs, pcs, esp_slots, board_mods, slot_unlock, beasts, beast_families, beast_stages, beast_evo, mimic_weapons = \
         build_builder_data(xml, dic, type_title, board_cat, excluded_jobs)
     machine = build_machine_data(xml, dic, type_title, cat_title_en)   # drone frames / SP / OS / units / reinforcement / modules
     item_sources = ability_item_sources(xml)                          # ability -> Slot source (Potion/Grenade/Spray/Device)
@@ -1632,7 +1681,7 @@ def main():
                    masteries, sets, enemy_missions, mission_info, placed, enemy_dialog,
                    dialogues, jobs, pcs, esp_slots, board_mods, slot_unlock,
                    beasts, beast_families, beast_stages, beast_evo, machine, abilities, buffs, buff_groups,
-                   jt_teams=jt_teams, quests=quests, dialogue_buffs=dialogue_buffs,
+                   jt_teams=jt_teams, quests=quests, dialogue_buffs=dialogue_buffs, mimic_weapons=mimic_weapons,
                    high_risk_label=dic.get("Help/GameDifficultyAdditionalSetting_HighRiskReturn/Base_Title", "High Risk") or "High Risk",
                    generated=source_date(xml))
     if a.lang == "eng":   # share-code lookup tables are language-independent — emit once
@@ -1726,7 +1775,7 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                    esp_slots=None, board_mods=None, slot_unlock=None, builder_beasts=None, beast_families=None,
                    beast_stages=None, beast_evo=None, machine=None, abilities=None, buffs=None,
                    buff_groups=None, jt_teams=None, quests=None, high_risk_label="High Risk",
-                   generated=None, dialogue_buffs=None):
+                   generated=None, dialogue_buffs=None, mimic_weapons=None):
     """Emit web/data.js (window.TS_DATA) — denormalized, named masteries only."""
     enemy_missions = enemy_missions or {}
     mission_info = mission_info or {}
@@ -1967,6 +2016,7 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                "slotUnlock": slot_unlock or {},
                "beasts": builder_beasts or [], "beastFamilies": beast_families or [],
                "beastStages": beast_stages or {}, "beastEvo": beast_evo or [],
+               "mimicWeapons": mimic_weapons or [],
                "machine": machine or {}, "abilities": abilities or [], "buffs": buffs or {},
                "buffsById": dialogue_buffs or {},
                "buffGroups": buff_groups or {}, "quests": quests or [],
