@@ -46,15 +46,16 @@ Open / deferred items for the extractor + web tool. (Status: ☐ open · ◐ par
   **Left:** the value-carrying / no-template branches — discharge & reflect damage, cost/SP eaters,
   untargetable, explosion, HP-over-time, `ImmuneRace`. Low value (exotic buffs, diminishing returns);
   port by frequency, incrementally.
-- ☐ **Compute actual damage/heal for an ability given a unit (and optionally a target).** The
-  `$DamageAmount$` token (488 abilities, currently shown as X where present) is
-  **runtime, unit-stat dependent** — the game computes it from the caster's AttackPower/ESPPower,
-  the ability's coefficient (`ApplyAmountChangeStep` & friends), hit-rate calculator, and the
-  target's Armor/Resistance/etc. Port that formula so we can show a concrete number (or range)
-  for a built unit — and a vs-target number when an enemy is supplied. Lets the board builder
-  preview real damage and resolves the `$DamageAmount$`/heal placeholders in ability descriptions.
-  Source: the damage path in `script/` (battle/ability calc) + `GetHitRateCalculator_*`; ties into
-  the Abilities tab and Stage 2 of "Statuses / buffs". Scope the formula inputs before committing.
+- ◐ **Compute actual damage/heal for an ability given a unit (and optionally a target).**
+  **Done — the `$DamageAmount$` *formula* is now rendered** in ability descriptions (base +
+  `(+pct% stat)` scaling terms, e.g. "100 (+75% Attack Power)(+25% Speed)"), replacing the old `X`
+  placeholder. Base = `ApplyAmountChangeStep`; stats = the `<AdditionalApplyAmount>` list; the
+  unit-dependent `Cost` term resolves to the owner's resource (Vigor/Rage/Fuel). See DATAMINING
+  "`$DamageAmount$` — the per-hit damage formula" (`resolve_damage_amount`).
+  **Left:** the *concrete number* for a specific built unit (and a vs-target number) — the game
+  computes it from the caster's AttackPower/ESPPower × the coefficient, hit-rate calculator, and the
+  target's Armor/Resistance. Port that from the damage path in `script/` (battle/ability calc) +
+  `GetHitRateCalculator_*` to let the board builder preview real damage. Scope the inputs first.
 
 ## Dialogue tab
 - ☐ **Continue clarity passes.** Keep reviewing the rendered dialogue/script output for

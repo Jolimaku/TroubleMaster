@@ -948,20 +948,28 @@ def build_player_abilities(xml, dic, beasts, machine_units, item_sources, abilit
     table with `<Normal>`/`<Danger>`/`<Rage>` rows (the priorities a unit uses normally / at low HP /
     while berserk-`Rage`-afflicted). Only `<Abilities>` is character-accurate; use it, not those.
 
-    Returns (player_set, owners, auto_source). owners[aid] = sorted display labels — character names
-    (`ObjectInfo/<Name>/Title`) and beast family titles — for the "which unit has it" badge. Item /
-    mastery / weapon abilities carry no owner (the Slot column already conveys their source).
-    auto_source[aid] = the `AutoActiveAbility` source that reached a captured companion (so it can
-    inherit that source's Slot access-source)."""
+    Returns (player_set, owners, auto_source, cost_type). owners[aid] = sorted display labels —
+    character names (`ObjectInfo/<Name>/Title`) and beast family titles — for the "which unit has it"
+    badge. Item / mastery / weapon abilities carry no owner (the Slot column already conveys their
+    source). auto_source[aid] = the `AutoActiveAbility` source that reached a captured companion (so it
+    can inherit that source's Slot access-source). cost_type[aid] = the owner unit's action resource
+    (`Vigor`/`Rage`/`Fuel`, from `Base_CostType`) when every owner agrees — the label for a
+    $DamageAmount$ formula's unit-dependent `Cost` term; absent when owners disagree or are unknown."""
     obj = {c.get("name"): c for c in ET.parse(os.path.join(xml, "object.xml")).getroot().iter("class")}
 
     def unit_abilities(uid):
         c = obj.get(uid)
         return [a for a in re.split(r"[,\s]+", (c.get("Ability") or "").strip()) if a] if c is not None else []
 
+    def cost_of(uid):                                # the unit's action resource (Vigor/Rage/Fuel)
+        c = obj.get(uid)                             # — Base_CostType, Human/Beast/Machine per Race
+        ct = c.get("Base_CostType") if c is not None else None
+        return ct if ct not in (None, "None", "") else None
+
     player = set(item_sources)                       # spray <id>2 upgrades + slotless item abilities
     char_owner = collections.defaultdict(set)        # ability -> {character base name}
     beast_owner = collections.defaultdict(set)        # ability -> {beast family title}
+    ability_cost = collections.defaultdict(set)      # ability -> {owner resource(s)}, for $DamageAmount$ Cost term
 
     # class unlocks — the authoritative per-character source: `Pc.xml` `<char>/EnableJobs/<job>/
     # <Abilities>` (each `<property Name= RequireLv=>` is an ability the character learns by levelling
@@ -974,6 +982,7 @@ def build_player_abilities(xml, dic, beasts, machine_units, item_sources, abilit
             for p in a.findall("property"):
                 if p.get("Name"):
                     player.add(p.get("Name")); char_owner[p.get("Name")].add(pc.get("name"))
+                    ability_cost[p.get("Name")].add(cost_of("PC_" + pc.get("name")))   # char battle unit
 
     for uid in obj:                                  # battle units add their loadout's sub-abilities + the story/guest
         if not uid:                                  # object.xml <class> with no name attr (never happens; keeps types honest)
@@ -981,7 +990,7 @@ def build_player_abilities(xml, dic, beasts, machine_units, item_sources, abilit
         m = _PC_UNIT_RE.match(uid)                   # chars (Mon_PC_*, which have no Pc.xml class-unlock entry)
         if m and uid.startswith(("PC_", "Mon_PC_")):
             for aid in unit_abilities(uid):
-                player.add(aid); char_owner[aid].add(m.group(1))
+                player.add(aid); char_owner[aid].add(m.group(1)); ability_cost[aid].add(cost_of(uid))
 
     for c in ET.parse(os.path.join(xml, "Item.xml")).getroot().iter("class"):   # equipment / any unit
         if c.get("Ability") and c.get("Ability") != "None":
@@ -999,9 +1008,10 @@ def build_player_abilities(xml, dic, beasts, machine_units, item_sources, abilit
     for b in beasts:                                 # player beasts (owner = family)
         for aid in unit_abilities(b["id"]):
             player.add(aid); beast_owner[aid].add(b.get("familyTitle") or b.get("family"))
+            ability_cost[aid].add(cost_of(b["id"]))
     for u in machine_units:                          # player drones (no own Ability; device-granted)
         for aid in unit_abilities(u["id"]):
-            player.add(aid)
+            player.add(aid); ability_cost[aid].add(cost_of(u["id"]))
 
     # AutoActiveAbility closure — a kept ability's toggle-companion is itself player-usable. Follow
     # transitively, inheriting the source's owner so the companion shows the same unit badge, and
@@ -1020,16 +1030,26 @@ def build_player_abilities(xml, dic, beasts, machine_units, item_sources, abilit
                     char_owner[tgt] |= char_owner[src]
                 if beast_owner.get(src):
                     beast_owner[tgt] |= beast_owner[src]
+                if ability_cost.get(src):
+                    ability_cost[tgt] |= ability_cost[src]
 
     owners = {}
     for aid in set(char_owner) | set(beast_owner):
         labels = {dic.get(f"ObjectInfo/{n}/Title") or n for n in char_owner.get(aid, ())}
         labels |= {fam for fam in beast_owner.get(aid, ()) if fam}
         owners[aid] = sorted(labels)
-    return player, owners, auto_source
+    # ability -> the distinct owner action-resources (Vigor/Rage/Fuel, from Base_CostType). A single
+    # entry is the clean case; owners that disagree keep all candidates so build_abilities can join
+    # them ("Vigor/Rage") for a $DamageAmount$ Cost term. Absent aid or empty set → no known owner
+    # resource (build_abilities then falls back to all three).
+    ability_cost_types = {aid: sorted(r for r in res if r) for aid, res in ability_cost.items()}
+    return player, owners, auto_source, ability_cost_types
 
 
-def build_abilities(dic, ability_cls, mclass, item_sources, player_set, owners, auto_source):
+COST_RESOURCE_ORDER = ("Vigor", "Rage", "Fuel")   # canonical order for a joined Cost label (human/beast/drone)
+
+
+def build_abilities(dic, ability_cls, mclass, item_sources, player_set, owners, auto_source, cost_type):
     """Reference rows for the Abilities tab: each named ability's slot/type/element, action cost,
     SP, cooldown, cast delay, range, targets, resolved effect text (resolve_description with the
     Ability idspace), and the masteries that grant or modify it. Skipped: unnamed internal abilities
@@ -1098,7 +1118,13 @@ def build_abilities(dic, ability_cls, mclass, item_sources, player_set, owners, 
                 slot = item_sources.get(src) or ("Mastery" if src in grants else None)
             if aid not in grants:                        # a companion → inherit the source's grantedBy too
                 granted_src = src
-        desc = resolve_description(dic, c, "Ability")    # refs are inline sentinel markup in desc
+        # $DamageAmount$ Cost term → the owner unit's action-resource title(s). One when all owners
+        # agree; disagreeing / unknown owners join every candidate ("Vigor/Rage/Fuel") since the tool
+        # is unit-agnostic and can't pick one. Order fixed (COST_RESOURCE_ORDER), titles localized.
+        cands = cost_type.get(aid) or []
+        cands = [r for r in COST_RESOURCE_ORDER if r in cands] or list(COST_RESOURCE_ORDER)
+        cost_label = "/".join(dic.get(f"CostType/{r}/Title") or r for r in cands)
+        desc = resolve_description(dic, c, "Ability", cost_label)   # refs are inline sentinel markup in desc
         if not desc.strip():                             # subcommand abilities (e.g. Call of Fire) carry
             subs = [t.strip() for t in (c.get("AutoActiveAbility") or "").split(",")]  # only a runtime
             subs = [t for t in subs if t and not t.endswith("_Disable") and t in player_set]  # $SubAbility
@@ -1628,8 +1654,8 @@ def main():
         build_builder_data(xml, dic, type_title, board_cat, excluded_jobs)
     machine = build_machine_data(xml, dic, type_title, cat_title_en)   # drone frames / SP / OS / units / reinforcement / modules
     item_sources = ability_item_sources(xml)                          # ability -> Slot source (Potion/Grenade/Spray/Device)
-    player_set, ability_owners, auto_source = build_player_abilities(xml, dic, beasts, machine.get("units", []), item_sources, ability_cls)  # player-usable filter + owners
-    abilities = build_abilities(dic, ability_cls, mclass, item_sources, player_set, ability_owners, auto_source)  # Abilities reference tab
+    player_set, ability_owners, auto_source, ability_cost_type = build_player_abilities(xml, dic, beasts, machine.get("units", []), item_sources, ability_cls)  # player-usable filter + owners + owner resource
+    abilities = build_abilities(dic, ability_cls, mclass, item_sources, player_set, ability_owners, auto_source, ability_cost_type)  # Abilities reference tab
     buffs = build_buffs(dic, buff_cls, status_fmt)                     # buff effect lookup (hover tooltips)
     buff_groups = build_buff_groups(dic, buff_cls, group_cls)         # buff-group → members (group cards)
     dialogue_buffs = build_dialogue_buffs(dialogues, dic, buff_cls, status_fmt)  # id-keyed, for "gains X" hovers

@@ -38,16 +38,6 @@
     return (text || "").replace(REF_RE, (_, k, label) => label).split(IND).join("    ");
   }
 
-  // $DamageAmount$ is a runtime, unit-dependent value the static data can't compute (see TODO to
-  // eventually surface real numbers). Swap the raw token for a clear placeholder so it reads as
-  // intentional, not a bug — done once here so blobs + every render site pick up the same text.
-  const DAMAGE_PH = t("ability.damageAmount", "X");
-  const fixDamageToken = o => {
-    if (o && o.description) o.description = o.description.split("$DamageAmount$").join(DAMAGE_PH);
-  };
-  DATA.masteries.forEach(fixDamageToken);
-  (DATA.abilities || []).forEach(fixDamageToken);
-
   // precompute lowercase search blobs
   DATA.masteries.forEach(m => {
     m._sourceCount = m.enemies.length + m.characters.length + m.jobs.length

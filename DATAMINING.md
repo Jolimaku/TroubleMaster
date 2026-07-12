@@ -632,9 +632,31 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   the game's `GetBuffGroupText` → `buff.Group`) → rendered as **plain text**, since it names the element
   not the Fire buff family. `resolve_owner_token` reads `BuffGroup`, falling back to `Group` (never both
   set) and suppressing the chip on that fallback. (This also cleans up the six *Call of &lt;Element&gt;*
-  board masteries, whose description is that buff's effect via the `describe_buff` fallback.) 846/853 abilities resolve cleanly — only the runtime, unit-stat-dependent
-  `$DamageAmount$` is left (see TODO "Statuses / buffs", Stage 2+). Mastery output is unchanged
-  (the `idprefix` defaults to `Mastery`).
+  board masteries, whose description is that buff's effect via the `describe_buff` fallback.) All
+  ability tokens now resolve, including **`$DamageAmount$`** (the per-hit damage formula — see below).
+  Mastery output is unchanged (the `idprefix` defaults to `Mastery`).
+- **`$DamageAmount$` — the per-hit damage formula** (`resolve_damage_amount`, a port of
+  `shared_tooltip.lua GetDamageAmountText`). The game renders it as a **base number** followed by each
+  scaling stat as `(+<pct>% <stat>)` — e.g. Surge of Blades (`WaveSlash`) → "100 (+75% Attack Power)
+  (+25% Speed)", Raindrop Slash → "200 (+100% Attack Power)(+100% Speed)(+100% SP)". Two non-obvious
+  sources: (1) the **base number is `ApplyAmountChangeStep`**, *not* an `ApplyAmount` attribute — no
+  ability sets `ApplyAmount` in the XML; the engine computes it as `CalculatedProperty_Ability_ApplyAmount`
+  = `ApplyAmountChangeStep[Lv]` (`shared_status.lua`), a per-level array, and we take the Lv-1 (single)
+  value. Base `0` → no number shown (only the stats). (2) the **stat percentages are the child
+  `<AdditionalApplyAmount>` `<property name= value=>` list**, rendered in XML authoring order (which
+  matches the game's display order). Stat **titles** follow the Lua: normal stats use
+  `Status/<stat>/Title_HPChangeFunctionArg`; the specials are hand-mapped (`HP`→`Status/MaxHP/Title`,
+  `EnemyHP`→"Enemy "+that, `SP`→the title-less SP gauge's generic **"SP"** — the game shows the unit's
+  *"<Element> SP"*, but the library is unit-agnostic, so generic like the no-target tooltip). The first
+  term is bare (no parens) only when there's no base; otherwise every stat is parenthesised.
+  - **`Cost` is the unit's action resource** (Vigor/Rage/Fuel), so it's unit-dependent — the no-target
+    game tooltip omits it. We instead resolve it from the ability's **owner units' `Base_CostType`**
+    (Human→Vigor / Beast→Rage / Machine→Fuel, per `object.xml`): `build_player_abilities` returns a
+    `cost_type` map (aid → the distinct owner resources), and `build_abilities` passes the localized
+    `CostType/<res>/Title` as `cost_label` to `resolve_description`. All ~137 Cost-scaling abilities in
+    the default build are beast abilities → **Rage** (e.g. Fireball → "100 (+75% ESP Power)(+50% Rage)").
+    Owners that disagree, or an unknown owner, **join every candidate** (`COST_RESOURCE_ORDER`
+    "Vigor/Rage/Fuel") rather than drop the term — defensive; no ability in the current data hits it.
 - `describe()` builds a mastery's description in the game tooltip's line order
   (`script/shared/shared_tooltip.lua` `GetMasterySystemMessageText`): **authored `Desc_Base`**, then
   **debuff-immunity line(s)** and **terrain field-effect immunity** as consecutive lines, then the
@@ -866,10 +888,10 @@ resolved **effect**. The **hit-rate** (`HitRateType`, e.g. `Melee`/`Ranged`) res
 **`AbilityHitRateType`** idspace (근접/원거리…) — it has *no* entry in `MasteryType`/`AbilitySubType`,
 so it needs its own idspace or the raw English id leaks. The row detail adds range / targets /
 hit-rate / SP, flavor, and the masteries that **grant** or **modify** it (chips → Masteries tab).
-Descriptions resolve via `resolve_desc.py` (`idprefix="Ability"`); the runtime `$DamageAmount$`
-(unit-stat dependent) is left **literal in the data** — the web tool swaps it for a plain `X`
-placeholder at load time (`ability.damageAmount` i18n key in `app.js`), pending real per-unit
-numbers. **The same physical-class trap bites the in-text
+Descriptions resolve via `resolve_desc.py` (`idprefix="Ability"`); the `$DamageAmount$` per-hit
+damage formula is resolved at build time into the description text (base + `(+pct% stat)` terms — see
+"`$DamageAmount$` — the per-hit damage formula" above), so the web tool no longer needs its old `X`
+placeholder swap. **The same physical-class trap bites the in-text
 `$DamageType$` token** (`OWNER_REF["DamageType"]` in `resolve_desc.py`): it must resolve `SubType`
 via **`AbilitySubType`**, not `MasteryType` — otherwise Slashing/Blunt/Piercing/EMP leak as raw
 English inside the effect text even though the Element column (which already uses `AbilitySubType`)
@@ -893,8 +915,7 @@ now falls back Title→Base_Title (same as the Mastery branch) or item names ref
 descriptions leak as raw ids in every language. (2) **`$Target$`** reads the owning ability's
 `Target` attribute (a relation enum) and resolves via the **`TargetType`** idspace (`Enemy`→적,
 `Ally`→아군, `Any`→모든 대상) — `OWNER_REF["Target"]`, mirroring the game's own "…deal X damage to
-Enemy" text. (3) The rest are **not** translation bugs and none reach the UI: `$DamageAmount$` is a
-runtime unit-stat token (rendered `X` in the web tool); `$Overcharge$` sits in the unreferenced
+Enemy" text. (3) The rest are **not** translation bugs and none reach the UI: `$Overcharge$` sits in the unreferenced
 `충성적`/Loyal beast-loyalty buff (0 `buffRefs`, never hovered); and `1/Height` is a **typo in the
 game's own `Mastery.xml`** (`Idspace="1"` on a `Height` FormatKeyword — real entry is
 `Help/Height/Base_Title`) whose mastery (`CoverPredator`) shows its `Conceal` buff text instead, so

@@ -211,7 +211,6 @@ window.TS_UI = {
   "ability.targets": "대상 {n}개",
   "ability.sp": "{n} SP",
   "ability.hit": "{type} 명중",
-  "ability.damageAmount": "X",   // 런타임·유닛 종속 $DamageAmount$ 자리표시자
   "buff.moreMembers": "외 {n}개",
 
   // 특성판 편성 — 보드 / 슬롯 / 패널 / 사이드바

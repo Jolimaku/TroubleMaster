@@ -210,7 +210,6 @@ window.TS_UI = {
   "ability.targets": "{n} targets",
   "ability.sp": "{n} SP",
   "ability.hit": "{type} hit",
-  "ability.damageAmount": "X",   // placeholder for the runtime, unit-dependent $DamageAmount$
   "buff.moreMembers": "+{n} more",
 
   // board builder — board, slots, panels, sidebar

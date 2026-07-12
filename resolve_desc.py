@@ -340,13 +340,16 @@ COLOR_WORDS = {"White", "Black", "Red", "Green", "Blue", "Yellow", "Orange", "Cy
                "Gray", "Grey", "Cream", "Perano", "LimeGold", "Gold", "Pink", "Purple"}
 
 
-def resolve_owner_token(dic, owner, tok):
+def resolve_owner_token(dic, owner, tok, cost_label=None):
     """Resolve a bare ability-text $tok$ from the owning class's attributes, or "" to drop a
-    colour-markup token. Returns None if `tok` isn't an owner token (caller falls back). Runtime
-    values the static data can't compute (e.g. $DamageAmount$, unit-stat dependent) aren't here,
-    so they pass through unresolved by design. Buff/ability refs come back as inline sentinel markup."""
+    colour-markup token. Returns None if `tok` isn't an owner token (caller falls back).
+    `$DamageAmount$` builds the game's per-hit damage formula (see resolve_damage_amount);
+    `cost_label` is the owner unit's action-resource title (Vigor/Rage/Fuel) for its `Cost` term.
+    Buff/ability refs come back as inline sentinel markup."""
     if tok in COLOR_WORDS or tok.endswith("_ON") or tok.endswith("_OFF"):
         return ""
+    if tok == "DamageAmount":
+        return resolve_damage_amount(dic, owner, cost_label)
     spec = OWNER_REF.get(tok)
     if spec is None:
         return None
@@ -381,6 +384,57 @@ def _fmt_num(v):
     except (TypeError, ValueError):
         return str(v)
     return str(int(f)) if f == int(f) else ("%g" % f)
+
+
+def _damage_stat_title(dic, name, cost_label):
+    """Display name of one `AdditionalApplyAmount` stat in a $DamageAmount$ formula. Mirrors
+    shared_tooltip.lua GetDamageAmountText: normal stats use Status/<name>/Title_HPChangeFunctionArg
+    (its `pairs` loop), while the specials are hand-mapped. Returns None to drop the term (a
+    unit-dependent Cost with no known owner resource)."""
+    if name == "SP":                    # element-specific "<Element> SP" needs a unit → generic "SP"
+        return _title(dic, "Status", "MaxSP")
+    if name == "HP":
+        return dic.get("Status/MaxHP/Title")
+    if name == "EnemyHP":
+        return (dic.get("WordCollection/Enemy/Text") or "Enemy") + " " + (dic.get("Status/MaxHP/Title") or "")
+    if name == "Cost":                  # action resource (Vigor/Rage/Fuel) — from the owner unit, or drop
+        return cost_label
+    return dic.get(f"Status/{name}/Title_HPChangeFunctionArg") or dic.get(f"Status/{name}/Title") or name
+
+
+# The game appends these four to the stat list AFTER the `pairs(statusList)` normal stats, in this
+# fixed order (shared_tooltip.lua) — none is a `Status` class, so each enters via a hand-coded insert.
+_DAMAGE_SPECIALS = ("SP", "HP", "EnemyHP", "Cost")
+
+
+def resolve_damage_amount(dic, owner, cost_label=None):
+    """The game's $DamageAmount$ per-hit damage formula (shared_tooltip.lua GetDamageAmountText):
+    the base number (`ability.ApplyAmount` = `ApplyAmountChangeStep[Lv]`, the Lv-1 value; omitted
+    when 0) followed by each `AdditionalApplyAmount` stat as `(+<pct>% <stat>)` — e.g. Surge of
+    Blades → "100 (+75% Attack Power)(+25% Speed)". The first term is bare when there's no base.
+    Rendered unit-agnostically like the game's own no-target tooltip: SP is the generic "SP" (no
+    element), and the unit-dependent `Cost` term takes the owner's resource title (`cost_label`)
+    when known, else is dropped (as the no-target tooltip does).
+
+    Stat order mirrors the game: the normal stats first, then the specials (`_DAMAGE_SPECIALS`) in
+    their fixed order. We keep the normals in XML authoring order (Lua's `pairs` hash order over
+    statusList isn't reproducible, but authoring order matches the in-game tooltips checked)."""
+    step = _fmt_num(owner.get("ApplyAmountChangeStep") or 0)
+    result = step if step not in ("0", "") else ""     # base number; ApplyAmount==0 shows no base
+    aa = owner.find("AdditionalApplyAmount")
+    props = [p for p in (aa.findall("property") if aa is not None else ())
+             if p.get("value") and _fmt_num(p.get("value")) != "0"]
+    normals = [p for p in props if p.get("name") not in _DAMAGE_SPECIALS]
+    specials = sorted((p for p in props if p.get("name") in _DAMAGE_SPECIALS),
+                      key=lambda p: _DAMAGE_SPECIALS.index(p.get("name")))
+    additional = ""
+    for p in normals + specials:
+        title = _damage_stat_title(dic, p.get("name"), cost_label)
+        if not title:                   # unit-dependent term with no resolvable label → drop it
+            continue
+        seg = f"{_fmt_num(p.get('value'))}% {title}"
+        additional += f"(+{seg})" if (result or additional) else seg
+    return result + " " + additional if (result and additional) else result + additional
 
 
 # The SP-gauge stats have no static Title: in-game the name is the unit's "<element> SP",
@@ -593,11 +647,12 @@ def _case_title(dic, prop, idprefix, mid, n):
     return ", ".join(parts)
 
 
-def resolve_description(dic, owner, idprefix="Mastery"):
+def resolve_description(dic, owner, idprefix="Mastery", cost_label=None):
     """owner: a Mastery.xml <class> Element (default), or an Ability.xml <class> when
     idprefix="Ability" — both share the same Desc_Base/FormatKeyword shape. Returns resolved
     multi-line text (with inline sentinel ref markup). `idprefix` is the dictionary idspace its
-    Desc_Base lines live under."""
+    Desc_Base lines live under. `cost_label` (abilities only) is the owner unit's action-resource
+    title (Vigor/Rage/Fuel), used for the `Cost` term of a $DamageAmount$ formula."""
     mid = owner.get("name")
     db = owner.find("Desc_Base")
     if db is None:
@@ -633,7 +688,7 @@ def resolve_description(dic, owner, idprefix="Mastery"):
             if tok in pool:
                 return pool[tok]
             if idprefix != "Mastery":          # ability-text owner tokens ($ApplyBuff$, colours…)
-                ov = resolve_owner_token(dic, owner, tok)
+                ov = resolve_owner_token(dic, owner, tok, cost_label)
                 if ov is not None:
                     return ov
             g = resolve_global(dic, tok)
