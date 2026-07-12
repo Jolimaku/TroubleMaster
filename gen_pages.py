@@ -24,8 +24,9 @@ LANGS = {
         "dir": "ko",                 # web/<dir>/index.html
         "html_lang": "ko",           # <html lang="…">
         "suffix": "kor",             # ui.<suffix>.js / data.<suffix>.js
-        # the language switcher on the localized page links back to English
-        "switch": '<a class="lang-switch" href="../index.html" hreflang="en" lang="en">English</a>',
+        # the language switcher on the localized page links back to English (pretty dir URL; the
+        # .dir-index marker lets i18n.js re-append index.html under the file:// protocol)
+        "switch": '<a class="lang-switch dir-index" href="../" hreflang="en" lang="en">English</a>',
     },
 }
 
@@ -37,7 +38,7 @@ def generate(cfg):
     # 2. stylesheet — the localized page sits one directory deeper
     html = html.replace('href="style.css"', 'href="../style.css"', 1)
     # 3. language switcher → back to English
-    html = re.sub(r'<a class="lang-switch"[^>]*>.*?</a>', cfg["switch"], html, count=1)
+    html = re.sub(r'<a class="lang-switch[^>]*>.*?</a>', cfg["switch"], html, count=1)
     # 4. scripts: prefix "../", swapping the English UI-string + data files for the localized ones.
     #    The regex matches only bare-filename srcs (no "/"), i.e. exactly the page's own scripts.
     rename = {"ui.en.js": f"ui.{cfg['suffix']}.js", "data.js": f"data.{cfg['suffix']}.js"}

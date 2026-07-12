@@ -267,8 +267,10 @@ it loads (clean URLs for GitHub Pages, and works the same from `file://`):
 - **A language page** is `<lang>/index.html` — the same shell, loading `../ui.<lang>.js` +
   `../i18n.js` + `../data.<lang>.js` (instead of the English `ui.en.js` + `data.js`) and setting
   `<html lang>`. The
-  language switch is a plain `<a href>` link between pages (uses explicit `index.html` so
-  it works from `file://`, where a bare `ko/` would open a directory listing).
+  language switch is a plain `<a href>` link between pages, kept as a pretty directory URL
+  (`ko/`, `../`) tagged with the `dir-index` marker class. A server resolves those to
+  `index.html`; under `file://` (where a bare `ko/` would open a directory listing) `i18n.js`
+  re-appends `index.html` to every `a.dir-index` at load — so `.dir-index` hrefs must end in `/`.
   **Generated, not hand-edited:** `python gen_pages.py` stamps each `<lang>/index.html` from the
   canonical `web/index.html`, applying exactly those differences (page lang, `../`-prefixed
   asset/script srcs, `ui.en.js`→`ui.<suffix>.js`, `data.js`→`data.<suffix>.js`, switch-back
