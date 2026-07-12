@@ -522,19 +522,23 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     TwoHandClub→Warrior, Axe→Marauder, Spray→Thrower, Bangle→Mage`); a named `Munggo_<class>`
     (Category `Beast`, in a form's `FixedEvolutionMastery`) grants an advanced class + its basics
     (e.g. `Munggo_Barbarian` → Barbarian/Warrior/Marauder). The extractor resolves each grant's jobs
-    to the union of their `accessTypes` closures and emits per-form:
-    - **advanced** forms (`Mon_Beast_Munggo_<weapon>`, e.g. Black Eyepatch): `mimicAccess` = the
-      `Munggo_<class>` grant;
-    - **basic** mature forms (`Mon_Beast_Munggo_Base_<weapon>`, e.g. Swordsman Mungo): `mimicAccess`
-      = the weapon's basic class (weapon from the id suffix — the only glue not in the data; every
-      suffix equals its `ItemType` except `MartialArtist`→`BattleGlove`);
-    - the weapon-agnostic **adolescent** `Mon_Beast_Munggo_Base`: `mimicChoice: true` (no fixed
-      class). The builder splits it into one Form-dropdown entry per weapon (from the global
-      `mimicWeapons` table) backed by a persisted `mimic` pick, so a board commits to a single class
-      (you can't mix two classes' masteries). `bldAccessTypes` adds `mimicAccess`, or the chosen
-      weapon's class for a `mimicChoice` form; `bldNormalized` prunes anything outside it.
-    Every Mungo form is its own coded roster unit (`MasteryCode.xml` `Beast`), so all are shareable;
-    the `mimic` pick rides the link/localStorage like `evo`, leaving the bare in-game code untouched.
+    to the union of their `accessTypes` closures and emits a single `mimicAccess` list per form.
+    **A form's weapon is fixed, not chosen** — each unit's `object.xml EnableEquipWeapon` names the
+    one weapon it can equip, so class access follows from that:
+    - **advanced/named** forms (`Mon_Beast_Munggo_<weapon>`, e.g. Black Eyepatch): `mimicAccess` = the
+      `Munggo_<class>` grant (advanced class + basics);
+    - every **basic** form — the seven `Mon_Beast_Munggo_Base_<weapon>` mature forms (e.g. Swordsman
+      Mungo) **and** the **adolescent** `Mon_Beast_Munggo_Base` itself: `mimicAccess` = the basic class
+      for that unit's `EnableEquipWeapon` via the `Munggo` weapon→job table. The **adolescent** is the
+      trap: it equips **only `BattleGlove`** (→ Fighter) — it does *not* freely switch weapons/classes
+      before it grows up, as we first assumed. Its weapon (and thus class) is committed at the
+      stage-2→3 **evolution** into one of the seven weapon forms (Beast.xml `<Evolutions>`, Lv16 + a
+      Perfect Jewel), which are the classes proper. (Sourcing from `EnableEquipWeapon` — not the id
+      suffix — means no name-parsing special-cases: `Base_MartialArtist`'s glove resolves to
+      `BattleGlove`→Fighter automatically.)
+    `bldAccessTypes` just unions `mimicAccess` into the type set; `bldNormalized` prunes anything
+    outside it. Every Mungo form is its own coded roster unit (`MasteryCode.xml` `Beast`), so all are
+    shareable via the bare in-game code with no extra pick needed.
   - **Limit-modifier masteries** (curated from `shared_pc.lua`'s `Get_ExtraMax*MasteryCount_PC`
     / `Get_MaxMasteryCost_Shared_PC` lists × each mastery's `Base_ApplyAmount`): slot bonuses
     feed the cost cap via the `2×slots−1` formula — e.g. Self-Examination +1 Basic slot,

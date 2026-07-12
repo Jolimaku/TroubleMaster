@@ -1532,10 +1532,6 @@
   // beast evolution-mastery picks (1-of-3 per evolution level). The pool is global by Type
   // (Training/Nature/Gene) + the beast's own element, plus that form's species-unique `fixedEvo`.
   const beastEvoById = {}; (DATA.beastEvo || []).forEach(m => { beastEvoById[m.id] = m; });
-  // Mungo "Mimic" weapon -> basic class (+ that class's access types), for the weapon-agnostic
-  // adolescent form's per-weapon picker. Determinate forms carry their own `mimicAccess` instead.
-  const mimicWeaponById = {}; (DATA.mimicWeapons || []).forEach(w => { mimicWeaponById[w.weapon] = w; });
-  const mimicDefault = () => ((DATA.mimicWeapons || [])[0] || {}).weapon || null;
   const BEAST_GLOBAL_TYPES = new Set(["Training", "Nature", "Gene"]);
   function beastEvoPool(u) {
     if (!isBeast(u)) return [];
@@ -1548,7 +1544,7 @@
   }
   // `evo` = chosen pick id per evolution level (index 0 = level 1); empty string = no pick yet.
   // drones add `os` (reinforcement-pool selector) and `reinf` (reinforcement stage 1..4)
-  const bld = { id: null, pcId: null, jobId: null, level: 1, placed: {}, evo: [], os: null, reinf: 1, craft: null, mimic: null, sideTab: "masteries", q: "", catFilter: null };
+  const bld = { id: null, pcId: null, jobId: null, level: 1, placed: {}, evo: [], os: null, reinf: 1, craft: null, sideTab: "masteries", q: "", catFilter: null };
   // which "Missing N" set-panel sections are expanded — remembered for the session (so adding a
   // set from an expanded group doesn't re-collapse it); resets to just "Missing 1" on reload.
   const bldSetFolds = new Set([1]);
@@ -1571,8 +1567,8 @@
   // (e.g. validating an incoming share code without touching the global bld state). Only an *omitted*
   // arg defaults to global — passing an explicit pc with no/undefined job means "this unit, no class"
   // (so we never leak the active build's job into another unit's type set).
-  function bldAccessTypes(pc, job, mimic) {
-    if (pc === undefined) { pc = unitById[bld.pcId]; if (job === undefined) job = jobById[bld.jobId]; if (mimic === undefined) mimic = bld.mimic; }
+  function bldAccessTypes(pc, job) {
+    if (pc === undefined) { pc = unitById[bld.pcId]; if (job === undefined) job = jobById[bld.jobId]; }
     const s = new Set(["Common", "All", "Normal"]);
     if (pc) {
       if (pc.pcType) s.add(pc.pcType); if (pc.race) s.add(pc.race);
@@ -1581,10 +1577,9 @@
       // gated by the drone's SP or a job — they're board-placeable on every drone. Expose them so
       // bldAccessible lets those module-group masteries (and their sets) through.
       if (pc.race === "Machine") { s.add("Application_Control"); s.add("Application_Enhancement"); }
-      // Mungo Mimic: a determinate form grants a fixed class tree; the weapon-agnostic adolescent
-      // grants the basic class of its chosen weapon (one at a time — never two classes at once).
+      // Mungo Mimic: each form grants a fixed class tree by its equipped weapon (the adolescent's
+      // battle glove → Fighter; each evolved form its own weapon's class).
       if (pc.mimicAccess) pc.mimicAccess.forEach(t => s.add(t));
-      if (pc.mimicChoice && mimicWeaponById[mimic]) mimicWeaponById[mimic].access.forEach(t => s.add(t));
     }
     if (job) (job.accessTypes || []).forEach(t => s.add(t));
     return s;
@@ -1680,7 +1675,7 @@
     src = src || {};
     return { pcId: src.pcId || null, jobId: src.jobId || null, level: src.level || 1,
              placed: JSON.parse(JSON.stringify(src.placed || {})), evo: (src.evo || []).slice(),
-             os: src.os || null, reinf: src.reinf || 1, craft: src.craft || null, mimic: src.mimic || null };
+             os: src.os || null, reinf: src.reinf || 1, craft: src.craft || null };
   }
   const bldBlank = name => ({ id: bldUid(), name, ...bldStateOf() });
   function bldStorePersist() {
@@ -1698,14 +1693,12 @@
     const pc = unitById[b.pcId];
     const out = { pcId: pc ? b.pcId : null, level: Math.max(1, +b.level || 1),
       jobId: pc ? (pc.jobs.includes(b.jobId) ? b.jobId : pc.jobs[0]) : null,
-      placed: {}, os: null, reinf: Math.min(4, Math.max(1, +b.reinf || 1)), craft: null, evo: [],
-      // weapon-agnostic Mungo (mimicChoice): keep the chosen weapon, else default to the first
-      mimic: (pc && pc.mimicChoice) ? (mimicWeaponById[b.mimic] ? b.mimic : mimicDefault()) : null };
+      placed: {}, os: null, reinf: Math.min(4, Math.max(1, +b.reinf || 1)), craft: null, evo: [] };
     // gate placed masteries the same way as the sidebar/interactive switch: they must still exist,
     // still map to their column, AND be accessible to the current form/class (bldAccessTypes). This
     // is the single enforcement point every load/import/canon path shares, so a build stored with a
     // now-incompatible mastery (e.g. from an older data set or a share code) heals on load.
-    const ntypes = pc ? bldAccessTypes(pc, jobById[out.jobId], out.mimic) : null;
+    const ntypes = pc ? bldAccessTypes(pc, jobById[out.jobId]) : null;
     BOARD_CATS.forEach(c => {                           // drop anything that no longer exists / fits / isn't accessible
       const arr = (b.placed && b.placed[c] || []).filter(id => {
         const m = masteryById[id];
@@ -1816,7 +1809,6 @@
       if (evo.length) p.evo = evo.join(",");
     } else if (isBeast(pc)) {
       if (evo.length) p.evo = evo.join(",");
-      if (pc.mimicChoice && b.mimic) p.mimic = b.mimic;   // adolescent Mungo's chosen weapon/class
     }
     return p;
   }
@@ -1832,13 +1824,12 @@
       if (picks.evo != null) b.evo = evo();
     } else if (isBeast(pc)) {
       if (picks.evo != null) b.evo = evo();
-      if (picks.mimic) b.mimic = picks.mimic;
     }
   }
   // pull the pick params (os/reinf/craft/evo) out of a URLSearchParams into a plain object
   function bldPicksFromParams(params) {
     const p = {};
-    ["os", "reinf", "craft", "evo", "mimic"].forEach(k => { if (params.has(k)) p[k] = params.get(k); });
+    ["os", "reinf", "craft", "evo"].forEach(k => { if (params.has(k)) p[k] = params.get(k); });
     return p;
   }
   // canonical key for a stored build — board share code plus the picks the code can't carry, so two
@@ -2201,14 +2192,6 @@
     const m = tbl[evoType] || tbl.Normal || {};
     return m[stage] || ("Stage " + stage);
   }
-  // a form's dropdown entr(ies): a weapon-agnostic Mungo (mimicChoice) expands into one option per
-  // weapon/class ("Mungo (Swordsman)" …) so you commit to a single class; any other form is one entry.
-  function formOpts(f) {
-    if (!f) return [];
-    if (f.mimicChoice) return (DATA.mimicWeapons || []).map(w =>
-      ({ id: f.id + "#" + w.weapon, label: tf("bld.mimicForm", "{form} ({cls})", { form: f.name, cls: w.label }) }));
-    return [f.id];
-  }
   // groups for the beast Form custom dropdown: the current form's direct evolutions on top (with the
   // unlock level), then every stage present (Draki reach 4). Mirrors the old native layout.
   function beastFormGroups(fam, currentFormId) {
@@ -2224,7 +2207,7 @@
     }
     for (let st = 1; st <= maxSt; st++) {              // iterate every stage present (Draki reach 4)
       const inStage = forms.filter(f => f.stage === st);
-      if (inStage.length) groups.push({ label: beastStageName(evoType, st), ids: inStage.flatMap(formOpts) });
+      if (inStage.length) groups.push({ label: beastStageName(evoType, st), ids: inStage.map(f => f.id) });
     }
     return groups;
   }
@@ -2401,17 +2384,8 @@
     bldEls.jobLabelText.textContent = beast ? t("bld.form", "Form") : drone ? t("bld.sp", "SP") : t("bld.class", "Class");
     bldEls.jobCsel.replaceChildren();
     if (beast) {
-      // weapon-agnostic Mungo: ensure a weapon is chosen (default the first); clear on other forms
-      if (pc.mimicChoice) { if (!mimicWeaponById[bld.mimic]) bld.mimic = mimicDefault(); }
-      else if (bld.mimic) bld.mimic = null;
-      const curFormVal = pc.mimicChoice && bld.mimic ? bld.pcId + "#" + bld.mimic : bld.pcId;
-      const formLabel = id => {
-        const h = id.indexOf("#");
-        if (h < 0) return (beastById[id] || {}).name || id;
-        return tf("bld.mimicForm", "{form} ({cls})",
-          { form: (beastById[id.slice(0, h)] || {}).name || id, cls: (mimicWeaponById[id.slice(h + 1)] || {}).label || id.slice(h + 1) });
-      };
-      bldEls.jobCsel.appendChild(makeCsel(curFormVal, beastFormGroups(pc.family, bld.pcId),
+      const formLabel = id => (beastById[id] || {}).name || id;
+      bldEls.jobCsel.appendChild(makeCsel(bld.pcId, beastFormGroups(pc.family, bld.pcId),
         v => bldSelectForm(v),
         { labelOf: formLabel, cardOf: () => null, noNone: true }));
     } else if (drone) {
@@ -2745,7 +2719,7 @@
 
   // picking a character (PC / beast family / drone frame) starts a fresh board at its join state
   function bldSelectCharacter(v) {
-    bld.placed = {}; bld.evo = []; bld.craft = null; bld.mimic = null;   // a different character starts a fresh board
+    bld.placed = {}; bld.evo = []; bld.craft = null;   // a different character starts a fresh board
     if (v && v.startsWith("frame:")) {                 // picked a drone frame → default SP/OS, fresh
       const u = droneByFrameSp[v.slice(6) + "/" + (MACH.sp[0] || {}).id];
       bld.pcId = u ? u.id : null;
@@ -2770,9 +2744,6 @@
   // picking the 2nd selector: a PC class, a beast form (evolve), or a drone SP structure
   function bldSelectForm(v) {
     const u = unitById[bld.pcId];
-    // a weapon-agnostic Mungo form arrives as "<formId>#<weapon>" — split off the chosen weapon.
-    let mimic = null; const h = v.indexOf("#");
-    if (h >= 0) { mimic = v.slice(h + 1); v = v.slice(0, h); }
     // resolve the form/class the switch would produce, but don't commit until we know whether it
     // would strip masteries/picks the new form/class can't hold (then we ask for confirmation first).
     let nextPc = bld.pcId, nextJob = bld.jobId;
@@ -2780,11 +2751,10 @@
     else if (isBeast(u)) nextPc = v;                   // switch form (evolve)
     else nextJob = v;                                  // switch class
     const npc = unitById[nextPc];
-    const nextMimic = (npc && npc.mimicChoice) ? mimic : null;   // weapon only applies to a mimicChoice form
     // same eligibility gate as the sidebar/board (bldAccessTypes with no args = current form/class):
     // an advanced class's accessTypes already include the basic class it came from, so no separate
     // "prior classes" union is needed. evo picks use the new unit's evolution / AI-upgrade pool.
-    const types = bldAccessTypes(npc, jobById[nextJob], nextMimic);
+    const types = bldAccessTypes(npc, jobById[nextJob]);
     const evoPool = new Set(isDrone(npc) ? ((MACH.aiUpgrade || {})[bld.os] || []).map(x => x.id) : beastEvoPool(npc));
     const dropped = [];
     BOARD_CATS.forEach(c => (bld.placed[c] || []).forEach(id => {
@@ -2800,7 +2770,7 @@
       renderBuilder();                                 // cancelled — re-render resets the picker to the current form/class
       return;
     }
-    bld.pcId = nextPc; bld.jobId = nextJob; bld.mimic = nextMimic;   // commit, then prune what the new form/class can't keep
+    bld.pcId = nextPc; bld.jobId = nextJob;   // commit, then prune what the new form/class can't keep
     BOARD_CATS.forEach(c => {
       if (!bld.placed[c]) return;
       bld.placed[c] = bld.placed[c].filter(id => bldAccessible(masteryById[id], types, npc));
