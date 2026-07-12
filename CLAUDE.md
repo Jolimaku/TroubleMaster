@@ -17,6 +17,18 @@ it very likely was figured out and documented already. The "Data model notes" an
 top "How the data is stored" sections are the densest. Don't re-derive what's recorded.
 (For anything about the web tool or the build pipeline itself, check `README.md`.)
 
+## Querying game data
+Read-only queries over the data files — reach for these before writing a script:
+- **JSON** (`output/*.json`, `mastery_export.json`): `jq`.
+- **`web/data.js` / `web/data.kor.js`** are a `window.TS_DATA = {…};` wrapper, not pure JSON — strip it
+  first: `jq -Rs 'ltrimstr("window.TS_DATA = ") | rtrimstr("\n") | rtrimstr("\r") | rtrimstr(";") | fromjson | <query>' web/data.js`
+- **Game XML** (`Unpack/Data/xml/*.xml`): `yq -p xml -oy '<expr>'` (mikefarah/yq — the Go build, needs
+  `-p xml`). Attributes are `+@name` keys (`.["+@name"]`); a lone child parses as a map and repeated
+  children as a sequence, so wrap child access as `[.X.property] | flatten`. Handles class dumps,
+  `group_by` distributions, and compound `select(...)` predicates.
+- **Dictionary lookups** (`Status/<x>/Title`, EN/KO): the `.dic`/`.dkm` format isn't JSON/XML, so use
+  the committed helper — `python tools/dictq.py <key> [--lang kor|both]` (wraps `extract_masteries.Dictionary`).
+
 ## Keep the docs current
 When you work out something new about how the game data or this tool works — a new
 mechanism, a non-obvious key/path, a gotcha, a corrected assumption — **add it to the
