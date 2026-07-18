@@ -1544,7 +1544,7 @@
   }
   // `evo` = chosen pick id per evolution level (index 0 = level 1); empty string = no pick yet.
   // drones add `os` (reinforcement-pool selector) and `reinf` (reinforcement stage 1..4)
-  const bld = { id: null, pcId: null, jobId: null, level: 1, placed: {}, evo: [], os: null, reinf: 1, craft: null, sideTab: "masteries", q: "", catFilter: null };
+  const bld = { id: null, pcId: null, jobId: null, level: 1, placed: {}, evo: [], os: null, reinf: 1, craft: null, sideTab: "masteries", q: "", catFilter: null, fit: false };
   const bldEls = {
     bar: $("#builder-bar"), pcCsel: $("#bld-pc-csel"),
     jobLabelText: $("#bld-job-labeltext"), jobCsel: $("#bld-job-csel"),
@@ -2500,6 +2500,7 @@
     if (drone) { const rr = renderReinfRow(pc); if (rr) bldEls.board.appendChild(rr); }
     let totalUsed = 0;
     const broken = [];
+    const capacity = {};                // slot category -> { slotsFree, costFree } (drives the sidebar "Fit" filter)
     const slotById = {};                // placed mastery id -> its slot element (for set highlight)
     const setIconsById = {};            // placed mastery id -> its set-panel diamonds (reverse highlight)
     // components of every completed set — their board slots get a violet left border marking them
@@ -2521,6 +2522,7 @@
       const usedCost = fixedHere.reduce((a, m) => a + (m.cost || 0), 0)
         + placed.reduce((a, m) => a + (m.cost || 0), 0);
       totalUsed += usedCost;
+      capacity[cat] = { slotsFree: lim.unlocked - usedCount, costFree: lim.cost - usedCost };
       const colLabel = catDisplay[column.cat] || column.label;
       if (usedCount > lim.unlocked) broken.push(tf("bld.brokenSlots", "{label}: {n} masteries over {cap} unlocked slots", { label: colLabel, n: usedCount, cap: lim.unlocked }));
       if (usedCost > lim.cost) broken.push(tf("bld.brokenCost", "{label}: {n} points over {cap} cost cap", { label: colLabel, n: usedCost, cap: lim.cost }));
@@ -2615,7 +2617,7 @@
       bldEls.broken.classList.remove("show");
     }
 
-    renderBuilderSide(types, slotById, setIconsById);
+    renderBuilderSide(types, slotById, setIconsById, { capacity, totalFree: limits.total - totalUsed });
     bldSyncExportPanel();
   }
 
@@ -2677,8 +2679,9 @@
   }
 
   // slotById / setIconsById are the board's highlight maps (see renderBuilder); the Sets list wires
-  // its rows and diamonds into them so hovering there lights up the board (and vice-versa).
-  function renderBuilderSide(types, slotById, setIconsById) {
+  // its rows and diamonds into them so hovering there lights up the board (and vice-versa). fitCtx
+  // ({ capacity, totalFree }) is the remaining board room the Masteries "Fit" toggle filters against.
+  function renderBuilderSide(types, slotById, setIconsById, fitCtx) {
     bldEls.side.replaceChildren();
     const head = el("div.bld-side-head");
     ["masteries", "sets"].forEach(tab => {
@@ -2691,17 +2694,27 @@
     search.value = bld.q;
     search.addEventListener("input", () => {
       bld.q = search.value.trim().toLowerCase();
-      renderBuilderSideList(types, list, slotById, setIconsById);
+      renderBuilderSideList(types, list, slotById, setIconsById, fitCtx);
     });
-    bldEls.side.append(head, search);
+    const searchRow = el("div.bld-side-searchrow", {}, search);
+    // "Fit" toggle: hide the masteries that can't be placed without breaking a cap. Masteries tab only.
+    if (bld.sideTab === "masteries") {
+      const fit = el("button.bld-fit-filter", { class: bld.fit ? "active" : "",
+        title: t("bld.fitTitle", "Show only masteries that fit the board's free slots and cost caps") },
+        el("span.bld-fit-ico", { html: FUNNEL_SVG }),
+        el("span", { text: t("bld.fit", "Fit") }));
+      fit.addEventListener("click", () => { bld.fit = !bld.fit; renderBuilder(); });
+      searchRow.appendChild(fit);
+    }
+    bldEls.side.append(head, searchRow);
     const list = el("div.bld-side-list");
     bldEls.side.appendChild(list);
-    renderBuilderSideList(types, list, slotById, setIconsById);
+    renderBuilderSideList(types, list, slotById, setIconsById, fitCtx);
     // keep focus while typing
     if (document.activeElement === search) search.focus();
   }
 
-  function renderBuilderSideList(types, list, slotById, setIconsById) {
+  function renderBuilderSideList(types, list, slotById, setIconsById, fitCtx) {
     list.replaceChildren();
     const q = bld.q;
     if (bld.sideTab === "masteries") {
@@ -2709,8 +2722,32 @@
       const pc = unitById[bld.pcId];
       const onBoard = new Set(BOARD_CATS.flatMap(c => bld.placed[c] || []));
       (pc && pc.fixed || []).forEach(f => onBoard.add(f.id));
+      // "Fit" toggle: keep only masteries with a free unlocked slot in their category and enough
+      // cost headroom in both the category cap and the total cap (i.e. placing them stays valid).
+      // A mastery that itself raises a limit (shared_pc.lua board-mod) counts its own bonus, since
+      // placing it lifts the very cap it's checked against — a cost bonus is always cat="all", total
+      // is global, and a slot bonus helps its own fit only when cat="all" or its own slot category.
+      // A self-added slot ALSO raises that category's cost cap by 2 (the cap is 2*slots-1), so fold
+      // that into the cost headroom too. (Not covered: a mastery whose placement *completes a set*
+      // whose bonus raises a limit — that headroom comes from the set, not the mastery's own mod.)
+      const fits = m => {
+        const cat = slotOf(m);
+        const cap = fitCtx && fitCtx.capacity[cat];
+        if (!cap) return false;
+        let slotB = 0, costB = 0, totalB = 0;
+        ((DATA.boardMods || {})[m.id] || []).forEach(e => {
+          if (e.kind === "slot") { if (e.cat === "all" || e.cat === cat) slotB += e.amt; }
+          else if (e.kind === "cost") costB += e.amt;   // cost mods are always cat="all"
+          else if (e.kind === "total") totalB += e.amt;
+        });
+        const c = m.cost || 0;
+        return cap.slotsFree + slotB >= 1
+          && c <= cap.costFree + costB + 2 * slotB   // each self-added slot lifts the cost cap by 2
+          && c <= fitCtx.totalFree + totalB;
+      };
       const items = DATA.masteries.filter(m => bldAccessible(m, types)
         && !onBoard.has(m.id)
+        && (!bld.fit || fits(m))
         && (!bld.catFilter || m.categoryRaw === bld.catFilter)
         && (!q || m._blob.includes(q)));
       items.sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1);

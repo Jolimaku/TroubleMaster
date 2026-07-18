@@ -243,6 +243,8 @@ window.TS_UI = {
   "bld.sideMasteries": "Masteries",
   "bld.sideSets": "Sets",
   "bld.sideFilter": "Filter…",
+  "bld.fit": "Fit",
+  "bld.fitTitle": "Show only masteries that fit the board's free slots and cost caps",
   "bld.accessibleMasteries": "{n} accessible masteries",
   "bld.accessibleSets": "{n} accessible sets",
   "bld.catFiltered": "{n} {label} masteries · show all ✕",

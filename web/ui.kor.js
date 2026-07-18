@@ -244,6 +244,8 @@ window.TS_UI = {
   "bld.sideMasteries": "특성",
   "bld.sideSets": "세트",
   "bld.sideFilter": "필터…",
+  "bld.fit": "적합",
+  "bld.fitTitle": "여유 슬롯과 코스트 한도에 맞는 특성만 표시",
   "bld.accessibleMasteries": "사용 가능한 특성 {n}개",
   "bld.accessibleSets": "사용 가능한 세트 {n}개",
   "bld.catFiltered": "{label} 특성 {n}개 · 전체 보기 ✕",

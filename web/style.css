@@ -531,10 +531,22 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
   padding: 6px; border-radius: 6px; cursor: pointer; font-size: 13px;
 }
 .bld-side-tab.active { color: var(--accent); border-color: var(--accent); }
+.bld-side-searchrow { display: flex; gap: 6px; margin-bottom: 8px; }
 .bld-side-search {
+  flex: 1; min-width: 0;
   background: var(--bg); border: 1px solid var(--line); color: var(--fg);
-  padding: 6px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 8px;
+  padding: 6px 10px; border-radius: 6px; font-size: 13px;
 }
+/* "Fit" filter pill — reuses the tracking-list filter look (funnel glyph + accent when active) */
+.bld-fit-filter {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 13px;
+  background: var(--bg2); border: 1px solid var(--line); color: var(--muted);
+  padding: 0 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.bld-fit-filter:hover { border-color: var(--accent); color: var(--fg); }
+.bld-fit-filter.active { border-color: var(--accent); color: var(--accent); background: var(--bg3); }
+.bld-fit-ico { display: inline-flex; }
+.bld-fit-ico svg { width: 12px; height: 12px; display: block; }
 .bld-side-count { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
 .bld-side-count.bld-side-clear { color: var(--accent); cursor: pointer; }
 /* bleed into the sidebar's 10px right padding so the scrollbar parks in that gutter (padding-right

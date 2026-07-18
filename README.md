@@ -188,7 +188,9 @@ Tabs:
   sidebar (**Masteries** / **Sets**, filtered to the types that character can actually use)
   adds a single mastery or a whole set on click; placed masteries can be removed by clicking
   them, and each shows its card on hover. The **Masteries** tab hides anything already on the
-  board; the **Sets** tab lists the sets you haven't completed as component **diamonds** (placed
+  board and has a **Fit** toggle (next to the filter box) that further narrows the list to masteries
+  that still fit — a free unlocked slot in their category plus cost headroom in the category and
+  total caps; the **Sets** tab lists the sets you haven't completed as component **diamonds** (placed
   solid, missing dimmed) sorted **closest-to-complete first** — sets you have none of sink to the
   bottom — and **clicking one adds its missing masteries**. Placed masteries in a completed set get
   a violet right border; hovering a set (in the panel or sidebar) highlights its components on the
