@@ -490,7 +490,47 @@ COST_MODS_ALL = ["PangOfConscience", "Consideration", "GraciousRefusal", "Forthr
                  "AdaptiveTraining", "ParentalLove",                              # beast
                  "Application_PowerControl", "Module_AuxiliaryPowerControl",      # machine (drones)
                  "Module_PowerProvider", "Module_PowerDeliveryOptimization"]
-TOTAL_MODS = ["Frankness", "ColdRefusal", "LoveHate", "SocialLife"]        # +total training points
+TOTAL_MODS = ["Frankness", "ColdRefusal", "LoveHate", "SocialLife",        # +total training points (human)
+              "GrowthPotential", "MutantGene"]                              # +total (beast): evo pick / placeable Ability
+# Every curated limit-mod list above (SLOT_MODS, SLOT_MODS_ALL, COST_MODS_ALL, TOTAL_MODS) is a
+# hand-transcription of a hardcoded mastery-name list in shared_pc.lua — there's no structured XML
+# field for these, the effect is Lua-only. Nothing signals when a game patch edits those lists, so
+# tripwire on the exact array literals below: build_builder_data fails if any is gone, surfacing drift
+# instead of silently mis-modelling the board. Each string is byte-identical to the .lua (incl. its
+# quirky spacing, e.g. the trailing space in "'SocialLife' }"); the label names the constant it mirrors.
+# A curated constant that unions several Lua lists (TOTAL_MODS, COST_MODS_ALL) gets one entry per line.
+LUA_GUARD_FILE = "script/shared/shared_pc.lua"
+LUA_LIST_GUARDS = [
+    ("SLOT_MODS_ALL",          "{'IndomitableHeart', 'IndomitableHeart2'}"),
+    ("SLOT_MODS[Basic]",       "{'OpenMind', 'Persuasion', 'SelfExamination', 'Application_EnhancedFrame', 'HardBone', 'Module_FrameEnhanced', 'Module_FrameOptimaztion', 'Module_ModuleOptimization', 'BeastNormalTraining', 'GrowthPotential_Normal'}"),
+    ("SLOT_MODS[Support]",     "{'Flexibility', 'Principlism', 'ReasonablySuspects', 'Module_AuxiliarySupportModule', 'WildNatureKnowledge', 'Module_ModuleOptimization', 'Module_SupportModuleOptimaztion', 'BeastSubTraining', 'GrowthPotential_Sub'}"),
+    ("SLOT_MODS[Attack]",      "{'Hysterie', 'Brazenface', 'Module_AuxiliaryComplementaryModule', 'Module_ComplementaryModuleOptimaztion', 'TerritorialDisputes', 'Module_ModuleOptimization', 'BeastAttackTraining', 'GrowthPotential_Attack'}"),
+    ("SLOT_MODS[Defence]",     "{'TacticalRetreat', 'Sophistry', 'Module_AuxiliarySaftyModule', 'Module_SaftyModuleEnhanced', 'PersistentLife', 'Module_ModuleOptimization', 'BeastDefenceTraining', 'GrowthPotential_Defence'}"),
+    ("SLOT_MODS[Ability]",     "{'SocialLife', 'Module_AuxiliaryAIModule', 'Module_AuxiliaryAIModuleEnhanced', 'BeastAbilityTraining', 'GrowthPotential_Ability'}"),
+    ("COST_MODS_ALL (human)",  "{'PangOfConscience', 'Consideration', 'GraciousRefusal', 'ForthrightStatement', 'Sortilege', 'Egoist', 'Illuminati', 'KeyboardWarrior'}"),
+    ("COST_MODS_ALL (beast)",  "{'AdaptiveTraining', 'ParentalLove'}"),
+    ("COST_MODS_ALL (machine)","{'Application_PowerControl', 'Module_AuxiliaryPowerControl', 'Module_PowerProvider', 'Module_PowerDeliveryOptimization' }"),
+    ("TOTAL_MODS (human)",     "for _, masteryType in ipairs({'Frankness', 'ColdRefusal', 'LoveHate', 'SocialLife' }) do"),
+    ("TOTAL_MODS (beast)",     "for _, masteryType in ipairs({'GrowthPotential', 'MutantGene'}) do"),
+]
+
+
+def verify_lua_guard(data_dir, file_rel=LUA_GUARD_FILE, guards=LUA_LIST_GUARDS):
+    """Fail the build if the Lua source no longer contains the exact mastery-name lists that the
+       curated limit-mod constants mirror, so a game-patch change to any of them is noticed instead of
+       silently drifting out of sync. Reports every drifted list at once (label = constant to fix)."""
+    path = os.path.join(data_dir, *file_rel.split("/"))
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    missing = [f"{label}: {needle}" for label, needle in guards if needle not in text]
+    if missing:
+        raise RuntimeError(
+            f"{file_rel} no longer contains limit-mod mastery list(s) that the curated constants mirror:\n  "
+            + "\n  ".join(missing)
+            + "\nThe game may have changed which masteries modify board slots / cost cap / training "
+              "points — reconcile the named constant(s) with shared_pc.lua before rebuilding.")
+
+
 # ESP element -> per-category slot bonus (ESP.xml Max<Cat>MasteryCount)
 ESP_CATS = [("Basic", "MaxBasicMasteryCount"), ("Support", "MaxSubMasteryCount"),
             ("Attack", "MaxAttackMasteryCount"), ("Defence", "MaxDefenceMasteryCount"),
@@ -545,6 +585,7 @@ def build_builder_data(xml, dic, type_title, board_cat=None, excluded_jobs=()):
        `excluded_jobs` (see compute_excluded_jobs) lists job ids to drop — Developing="true"
        jobs (incl. every grade-3 "awakened" one) and unit-less hidden classes; empty when
        --include-developing. Availability keys off this set, not Grade."""
+    verify_lua_guard(os.path.dirname(xml))     # tripwire: TOTAL_MODS still matches the Lua source
     excluded_jobs = set(excluded_jobs)
     CATS = [("Basic", "MaxBasicMasteryCount"), ("Support", "MaxSubMasteryCount"),
             ("Attack", "MaxAttackMasteryCount"), ("Defence", "MaxDefenceMasteryCount"),
