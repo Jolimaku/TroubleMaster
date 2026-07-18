@@ -196,6 +196,13 @@ Tabs:
   builds** (new / duplicate / rename / delete + a switcher); the active build **autosaves** to
   `localStorage` continuously (and the active tab is remembered), so switching never loses work —
   all works from `file://` in Chrome/Firefox.
+  **Undo / redo** (bottom bar, after Export; `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` or `Ctrl+Y`, off
+  when a text field has focus) covers every board edit — placing/removing masteries, adding a whole
+  set, and the character / class / form / level / OS / reinforcement / evolution / craft selectors.
+  Each build has its **own history**, so switching builds is navigation, not an undoable step; the
+  history is **session-only** (in-memory, not persisted) and clears on reload. Internally it snapshots
+  the build at the single `bldSave()` persistence point and diffs, so redundant re-renders don't
+  record spurious steps.
   The same board works for **beasts** (the Character picker offers families; the 2nd selector is
   the **Form**, and an extra row picks the 1-of-3 **evolution masteries** per stage) and **drones**
   (Character = **Frame**, 2nd selector = **SP** structure, plus **OS** and **Reinforce** stage

@@ -1556,6 +1556,7 @@
     level: $("#bld-level"), summary: $("#bld-summary"),
     broken: $("#builder-broken"), board: $("#builder-board"), side: $("#builder-side"),
     importBtn: $("#bld-import"), exportBtn: $("#bld-export"), exportAllBtn: $("#bld-exportall"), io: $("#bld-io"),
+    undoBtn: $("#bld-undo"), redoBtn: $("#bld-redo"),
     listCsel: $("#bld-list-csel"), newBtn: $("#bld-new"), dupBtn: $("#bld-dup"),
     renameBtn: $("#bld-rename"), deleteBtn: $("#bld-delete"),
   };
@@ -1686,6 +1687,55 @@
     const b = bldStore.builds.find(x => x.id === bld.id);
     if (b) Object.assign(b, bldStateOf(bld));
     bldStorePersist();
+    bldTrack();                                        // fold any state change into the undo history
+  }
+
+  // ---- undo / redo (session-only, a separate stack per build id) ----
+  // Snapshot model: bldSave() is the universal persistence choke point, so every real edit funnels
+  // through bldTrack() below. It diffs the serialized build state against the last one it recorded;
+  // only an actual change pushes the *previous* snapshot onto that build's undo stack — so the many
+  // redundant renderBuilder()/bldSave() calls (side-tab switches, category filters, export flushes)
+  // add nothing. Stacks are keyed by bld.id, so switching builds is navigation and never recorded.
+  const BLD_UNDO_MAX = 100;
+  const bldUndo = {}, bldRedo = {};   // id → array of serialized bldStateOf() snapshots
+  const bldSnap = {};                 // id → last snapshot bldTrack() recorded (change detector)
+  let bldRestoring = false;           // true while applying an undo/redo (suppresses re-recording)
+  function bldTrack() {
+    const id = bld.id;
+    if (!id) return;
+    const cur = JSON.stringify(bldStateOf(bld));
+    const prev = bldSnap[id];
+    if (prev === undefined) { bldSnap[id] = cur; return; }   // seed on first activation — nothing to record
+    if (cur === prev) return;                                // no change
+    bldSnap[id] = cur;
+    if (bldRestoring) return;                                // the change *is* an undo/redo — don't re-record it
+    const stack = bldUndo[id] || (bldUndo[id] = []);
+    stack.push(prev);
+    if (stack.length > BLD_UNDO_MAX) stack.shift();
+    bldRedo[id] = [];                                        // a fresh edit invalidates the redo branch
+  }
+  // apply a serialized snapshot onto the live build (id/transient fields untouched)
+  function bldApplySnap(json) {
+    Object.assign(bld, bldStateOf(JSON.parse(json)));
+    bld.catFilter = null;             // a mastery the filter pointed at may no longer be placed
+  }
+  // move one step between stacks: from `undo` (or `redo`) onto the opposite stack, then apply + render
+  function bldStep(from, to) {
+    const id = bld.id;
+    const stack = from[id];
+    if (!stack || !stack.length) return;
+    (to[id] || (to[id] = [])).push(JSON.stringify(bldStateOf(bld)));  // current state → opposite branch
+    const snap = stack.pop();
+    bldRestoring = true;
+    bldApplySnap(snap);
+    renderBuilder();                  // its trailing bldSave/bldTrack records the restore as the new snapshot
+    bldRestoring = false;
+  }
+  const bldUndoStep = () => bldStep(bldUndo, bldRedo);
+  const bldRedoStep = () => bldStep(bldRedo, bldUndo);
+  function bldSyncUndoBtns() {
+    if (bldEls.undoBtn) bldEls.undoBtn.disabled = !(bldUndo[bld.id] || []).length;
+    if (bldEls.redoBtn) bldEls.redoBtn.disabled = !(bldRedo[bld.id] || []).length;
   }
   // normalize a stored/raw build's variable fields against current data (pure — shared by bldUse and
   // bldCanonCode, so a freshly-imported build and an already-stored one canonicalize identically)
@@ -1787,6 +1837,7 @@
   function bldDelete() {
     const cur = bldStore.builds.find(x => x.id === bld.id);
     if (!cur || !confirm(tf("bld.deleteConfirm", 'Delete build "{name}"?', { name: cur.name }))) return;
+    delete bldUndo[cur.id]; delete bldRedo[cur.id]; delete bldSnap[cur.id];   // drop its undo history
     bldStore.builds = bldStore.builds.filter(x => x.id !== cur.id);
     if (!bldStore.builds.length) bldStore.builds.push(bldBlank(t("bld.defaultName", "My build")));
     bldActivate(bldStore.builds[0]);
@@ -2427,6 +2478,7 @@
     bldEls.level.value = bld.level;
     bldSave();                       // persist the (resolved) current build
     bldRenderList();                 // refresh the Builds dropdown from the just-saved state (not stale)
+    bldSyncUndoBtns();               // enable/disable Undo/Redo for the active build's stacks
 
     if (!pc) {
       bldEls.summary.textContent = "";
@@ -2791,6 +2843,18 @@
     const url = URL.createObjectURL(new Blob([bldExportAll()], { type: "application/json" }));
     const a = el("a", { href: url, download: "troublemaster-builds.json" });
     a.click(); URL.revokeObjectURL(url);
+  });
+  bldEls.undoBtn.addEventListener("click", bldUndoStep);
+  bldEls.redoBtn.addEventListener("click", bldRedoStep);
+  // Ctrl/Cmd+Z to undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) to redo — only on the builder tab, and never
+  // while typing in a field (so the search box, level input and import textarea keep native undo).
+  document.addEventListener("keydown", e => {
+    if (state.view !== "builder" || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const tgt = e.target;
+    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) return;
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); bldUndoStep(); }
+    else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); bldRedoStep(); }
   });
   bldEls.newBtn.addEventListener("click", bldNew);
   bldEls.dupBtn.addEventListener("click", bldDuplicate);

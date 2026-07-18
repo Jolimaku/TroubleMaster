@@ -99,6 +99,10 @@ window.TS_UI = {
   "bld.exportall.title": "모든 빌드(및 즐겨찾기한 특성)를 백업 파일로 다운로드",
   "bld.export": "내보내기",
   "bld.export.title": "이 빌드 공유 — 게임 내 코드 + 링크",
+  "bld.undo": "실행 취소",
+  "bld.undo.title": "이 빌드의 마지막 변경 취소 (Ctrl+Z)",
+  "bld.redo": "다시 실행",
+  "bld.redo.title": "취소한 변경 다시 실행 (Ctrl+Shift+Z)",
 
   // ---- 앱에서 동적으로 생성되는 문자열 (t() / tf() + {플레이스홀더}) ----
   // 결과 개수 + 빈 상태

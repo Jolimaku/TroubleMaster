@@ -98,6 +98,10 @@ window.TS_UI = {
   "bld.exportall.title": "Download all your builds (and starred masteries) as a backup file",
   "bld.export": "Export",
   "bld.export.title": "Share this build — in-game code + link",
+  "bld.undo": "Undo",
+  "bld.undo.title": "Undo the last change to this build (Ctrl+Z)",
+  "bld.redo": "Redo",
+  "bld.redo.title": "Redo the last undone change (Ctrl+Shift+Z)",
 
   // ---- dynamic strings built in app.js (localized via t() / tf() with {placeholders}) ----
   // result counts + empty states

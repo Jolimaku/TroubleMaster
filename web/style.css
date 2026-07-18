@@ -562,6 +562,8 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
   padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
 }
 .bld-iobtn:hover { border-color: var(--accent2); color: var(--accent2); }
+.bld-iobtn:disabled { opacity: .4; cursor: default; }
+.bld-iobtn:disabled:hover { border-color: var(--line); color: var(--fg); }
 /* download-arrow glyph for the Backup button — a mask so it inherits the button's text colour
    (incl. the hover shift) and survives the data-i18n textContent swap (a real child node wouldn't) */
 .bld-iobtn-dl::before {
