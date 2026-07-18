@@ -1545,9 +1545,6 @@
   // `evo` = chosen pick id per evolution level (index 0 = level 1); empty string = no pick yet.
   // drones add `os` (reinforcement-pool selector) and `reinf` (reinforcement stage 1..4)
   const bld = { id: null, pcId: null, jobId: null, level: 1, placed: {}, evo: [], os: null, reinf: 1, craft: null, sideTab: "masteries", q: "", catFilter: null };
-  // which "Missing N" set-panel sections are expanded — remembered for the session (so adding a
-  // set from an expanded group doesn't re-collapse it); resets to just "Missing 1" on reload.
-  const bldSetFolds = new Set([1]);
   const bldEls = {
     bar: $("#builder-bar"), pcCsel: $("#bld-pc-csel"),
     jobLabelText: $("#bld-job-labeltext"), jobCsel: $("#bld-job-csel"),
@@ -2587,8 +2584,8 @@
       bldEls.board.appendChild(col);
     });
 
-    // ---- 6th panel: completed + partial mastery sets ----
-    bldEls.board.appendChild(renderSetPanel(slotById, setIconsById, types));
+    // ---- 6th panel: completed mastery sets (partials live in the Sets sidebar) ----
+    bldEls.board.appendChild(renderSetPanel(slotById, setIconsById));
 
     // data-driven mutual exclusion (Mastery.xml ExclusiveMastery): flag any placed pair the game
     // forbids together (e.g. Warrior's <-> Guardian's Descendant — the only such pair in the game).
@@ -2618,29 +2615,44 @@
       bldEls.broken.classList.remove("show");
     }
 
-    renderBuilderSide(types);
+    renderBuilderSide(types, slotById, setIconsById);
     bldSyncExportPanel();
   }
 
-  // the "Mastery Set" panel: completed sets (all components on the board) first, then a
-  // separator and the completable partial sets (≥1 component placed, the rest accessible),
-  // sorted by how many you already have. Each component is a hoverable icon (mastery card);
-  // missing components are dimmed; hovering a row lights up the placed ones on the board;
-  // clicking a partial row adds its missing masteries to the build.
-  function renderSetPanel(slotById, setIconsById, types) {
+  // a set's component diamonds (<span.bld-set-icons>): one per component, solid in its category
+  // colour when placed and dimmed when missing. Each diamond shows its mastery card on hover and
+  // lights up the same mastery's diamonds everywhere (panel + sidebar); registering into
+  // `setIconsById` also lets a board-slot hover reverse-highlight them. Shared by the completed-set
+  // panel and the Sets sidebar so their rows behave identically.
+  function bldSetIcons(s, placedIds, setIconsById) {
+    const icons = el("span.bld-set-icons");
+    s.components.forEach(c => {
+      const m = masteryById[c.id];
+      const ic = el("span.bld-setmastery", { class: (m && CAT_COLOR[m.categoryRaw] || "")
+        + (placedIds.has(c.id) ? "" : " missing") });
+      (setIconsById[c.id] || (setIconsById[c.id] = [])).push(ic);
+      const hiSame = on => (setIconsById[c.id] || []).forEach(x => x.classList.toggle("mastery-hi", on));
+      ic.addEventListener("mouseenter", () => hiSame(true));
+      ic.addEventListener("mouseleave", () => hiSame(false));
+      if (m) {
+        ic.addEventListener("mouseenter", () => showTip(ic, box => buildMasteryTip(m, box)));
+        ic.addEventListener("mouseleave", () => hideTip(ic));
+      }
+      icons.appendChild(ic);
+    });
+    return icons;
+  }
+  // toggle the board-slot highlight for a set's placed components (row-hover feedback)
+  const bldSetBoardHi = (s, slotById, on) => s.components.forEach(c => {
+    const node = slotById[c.id]; if (node) node.classList.toggle("set-hi", on);
+  });
+
+  // the "Mastery Set" panel (6th board cell): the sets your board already completes (every
+  // component placed). Component diamonds are all solid; hovering a row highlights its masteries on
+  // the board. The completable *partial* sets live in the Sets sidebar instead.
+  function renderSetPanel(slotById, setIconsById) {
     const placedIds = new Set(BOARD_CATS.flatMap(c => bld.placed[c] || []));
-    const scored = DATA.sets
-      .filter(s => s.components.length)
-      .map(s => ({ s, matched: s.components.filter(c => placedIds.has(c.id)).length }))
-      .filter(x => x.matched > 0);
     const full = completedSets(placedIds);
-    // partials sorted by how many you're still MISSING (so "1 away" sets group together
-    // regardless of how many components the set has), then by matched / name as tiebreak
-    const partial = scored
-      .filter(x => x.matched < x.s.components.length
-        && x.s.components.every(c => bldAccessible(masteryById[c.id], types)))
-      .map(x => ({ ...x, missing: x.s.components.length - x.matched }))
-      .sort((a, b) => a.missing - b.missing || b.matched - a.matched || a.s.name.localeCompare(b.s.name));
 
     const col = el("div.bld-col.bld-setcol");
     col.appendChild(el("div.bld-col-head", {},
@@ -2648,65 +2660,25 @@
       el("span.bld-cat-count", { text: full.length })));
 
     const body = el("div.bld-slots");
-
-    // one set row; addable=true makes it dim missing icons and add them on click
-    const setRow = (s, addable) => {
-      const row = el("div.bld-set-row", { class: addable ? "addable" : "" });
+    full.forEach(s => {
+      const row = el("div.bld-set-row");
       const label = el("span.bld-set-name", { text: s.name });
-      // hovering the name shows the set card; the icons (right side) show per-mastery
-      // cards instead, so they deliberately skip the set tip to avoid flicker
       label.addEventListener("mouseenter", () => showTip(label, box => buildSetTip(s, box)));
       label.addEventListener("mouseleave", () => hideTip(label));
-      const icons = el("span.bld-set-icons");
-      s.components.forEach(c => {
-        const m = masteryById[c.id];
-        const ic = el("span.bld-setmastery", { class: (m && CAT_COLOR[m.categoryRaw] || "")
-          + (placedIds.has(c.id) ? "" : " missing") });
-        ic.title = "";   // suppress the row's "add missing" tooltip from bubbling onto icons
-        (setIconsById[c.id] || (setIconsById[c.id] = [])).push(ic);   // for board→panel reverse highlight
-        // hovering a diamond lights up every diamond for the same mastery — across all sets,
-        // including dimmed (missing) ones — mirroring the board-slot hover
-        const hiSame = on => (setIconsById[c.id] || []).forEach(x => x.classList.toggle("mastery-hi", on));
-        ic.addEventListener("mouseenter", () => hiSame(true));
-        ic.addEventListener("mouseleave", () => hiSame(false));
-        if (m) {
-          ic.addEventListener("mouseenter", () => showTip(ic, box => buildMasteryTip(m, box)));
-          ic.addEventListener("mouseleave", () => hideTip(ic));
-        }
-        icons.appendChild(ic);
-      });
-      row.append(label, icons);
-      // light up the placed component masteries on the board while hovering the row
-      const hi = on => s.components.forEach(c => {
-        const node = slotById[c.id]; if (node) node.classList.toggle("set-hi", on);
-      });
-      row.addEventListener("mouseenter", () => hi(true));
-      row.addEventListener("mouseleave", () => hi(false));
-      if (addable) {
-        row.title = t("bld.addMissing", "Add the missing masteries to the build");
-        row.addEventListener("click", () => { s.components.forEach(c => bldPlace(c.id)); renderBuilder(); });
-      }
-      return row;
-    };
-
-    if (!full.length && !partial.length)
-      body.appendChild(el("div.bld-slot.empty", { text: t("bld.noSets", "No matching sets") }));
-    full.forEach(s => body.appendChild(setRow(s, false)));
-    // partials grouped by how many you're missing — each group foldable; the 1-away group open by default
-    [...new Set(partial.map(x => x.missing))].sort((a, b) => a - b).forEach((k, i) => {
-      const rows = partial.filter(x => x.missing === k);
-      const det = el("details.bld-set-fold");
-      det.open = bldSetFolds.has(k);                          // restore session expand state
-      det.addEventListener("toggle", () => det.open ? bldSetFolds.add(k) : bldSetFolds.delete(k));
-      det.appendChild(el("summary", { text: tf("bld.missing", "Missing {k}", { k }) + (i === 0 ? t("bld.missingComplete", " — click to complete") : "") + ` (${rows.length})` }));
-      rows.forEach(x => det.appendChild(setRow(x.s, true)));
-      body.appendChild(det);
+      row.append(label, bldSetIcons(s, placedIds, setIconsById));
+      row.addEventListener("mouseenter", () => bldSetBoardHi(s, slotById, true));
+      row.addEventListener("mouseleave", () => bldSetBoardHi(s, slotById, false));
+      body.appendChild(row);
     });
+    if (!full.length)
+      body.appendChild(el("div.bld-slot.empty", { text: t("bld.noSets", "No completed sets") }));
     col.appendChild(body);
     return col;
   }
 
-  function renderBuilderSide(types) {
+  // slotById / setIconsById are the board's highlight maps (see renderBuilder); the Sets list wires
+  // its rows and diamonds into them so hovering there lights up the board (and vice-versa).
+  function renderBuilderSide(types, slotById, setIconsById) {
     bldEls.side.replaceChildren();
     const head = el("div.bld-side-head");
     ["masteries", "sets"].forEach(tab => {
@@ -2719,17 +2691,17 @@
     search.value = bld.q;
     search.addEventListener("input", () => {
       bld.q = search.value.trim().toLowerCase();
-      renderBuilderSideList(types, list);
+      renderBuilderSideList(types, list, slotById, setIconsById);
     });
     bldEls.side.append(head, search);
     const list = el("div.bld-side-list");
     bldEls.side.appendChild(list);
-    renderBuilderSideList(types, list);
+    renderBuilderSideList(types, list, slotById, setIconsById);
     // keep focus while typing
     if (document.activeElement === search) search.focus();
   }
 
-  function renderBuilderSideList(types, list) {
+  function renderBuilderSideList(types, list, slotById, setIconsById) {
     list.replaceChildren();
     const q = bld.q;
     if (bld.sideTab === "masteries") {
@@ -2761,17 +2733,34 @@
         list.appendChild(it);
       });
     } else {
-      const items = DATA.sets.filter(s => types.has(s.type)
-        && s.components.some(c => bldAccessible(masteryById[c.id], types))
-        && (!q || s._blob.includes(q)));
-      items.sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1);
+      // this list shares the board's diamond registry, so drop the previous sidebar render's
+      // (now-detached) diamonds; the panel's stay — they're still on the board.
+      for (const k in setIconsById) setIconsById[k] = setIconsById[k].filter(n => n.isConnected);
+      const placedIds = new Set(BOARD_CATS.flatMap(c => bld.placed[c] || []));
+      // still-incomplete sets only (a fully-matched set drops out into the panel); each carries its
+      // matched/missing counts so we can sort closest-to-complete first.
+      const items = DATA.sets
+        .filter(s => types.has(s.type)
+          && s.components.some(c => bldAccessible(masteryById[c.id], types))
+          && (!q || s._blob.includes(q)))
+        .map(s => {
+          const matched = s.components.filter(c => placedIds.has(c.id)).length;
+          return { s, matched, missing: s.components.length - matched };
+        })
+        .filter(x => x.missing > 0)
+        // sets you've started (≥1 component placed) first, closest-to-complete on top; the ones you
+        // have none of sink to the bottom together regardless of how few components they need.
+        .sort((a, b) => (a.matched === 0) - (b.matched === 0)
+          || a.missing - b.missing || a.s.name.localeCompare(b.s.name));
       list.appendChild(countLine(tf("bld.accessibleSets", "{n} accessible sets", { n: items.length })));
-      items.forEach(s => {
-        const it = el("div.bld-item.bld-item-set", {},
-          el("span.bld-item-name", { text: s.name }),
-          el("span.bld-item-meta", { text: `${s.components.length} pc` }));
-        it.addEventListener("mouseenter", () => showTip(it, box => buildSetTip(s, box)));
-        it.addEventListener("mouseleave", () => hideTip(it));
+      items.forEach(({ s }) => {
+        // set-card tip lives on the name only (like the panel) so the diamonds' mastery tips don't fight it
+        const name = el("span.bld-item-name", { text: s.name });
+        name.addEventListener("mouseenter", () => showTip(name, box => buildSetTip(s, box)));
+        name.addEventListener("mouseleave", () => hideTip(name));
+        const it = el("div.bld-item.bld-item-set", {}, name, bldSetIcons(s, placedIds, setIconsById));
+        it.addEventListener("mouseenter", () => bldSetBoardHi(s, slotById, true));
+        it.addEventListener("mouseleave", () => bldSetBoardHi(s, slotById, false));
         it.addEventListener("click", () => {
           s.components.forEach(c => { if (bldAccessible(masteryById[c.id], types)) bldPlace(c.id); });
           renderBuilder();

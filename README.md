@@ -187,12 +187,16 @@ Tabs:
   training-point **cost cap**, plus a `Training Point used/total` readout. A right-hand
   sidebar (**Masteries** / **Sets**, filtered to the types that character can actually use)
   adds a single mastery or a whole set on click; placed masteries can be removed by clicking
-  them, and each shows its card on hover. Slots **unlock by character level** (locked ones
-  read `Unlock Lv N`); going over any slot, cost, or total cap is allowed but raises a
-  **"build broken"** banner. A sixth **Mastery Set** panel lists the sets your board already
-  completes, then (under a separator) the *partial* sets you could complete — sorted by how
-  many components you have, missing icons dimmed, **click to add the missing masteries**;
-  hovering a set highlights its components on the board. A **Builds** row keeps **multiple named
+  them, and each shows its card on hover. The **Masteries** tab hides anything already on the
+  board; the **Sets** tab lists the sets you haven't completed as component **diamonds** (placed
+  solid, missing dimmed) sorted **closest-to-complete first** — sets you have none of sink to the
+  bottom — and **clicking one adds its missing masteries**. Placed masteries in a completed set get
+  a violet right border; hovering a set (in the panel or sidebar) highlights its components on the
+  board, and hovering a component diamond lights up that mastery's diamonds everywhere. Slots
+  **unlock by character level** (locked ones read `Unlock Lv N`); going over any slot, cost, or
+  total cap is allowed but raises a **"build broken"** banner. A sixth **Mastery Set** panel lists
+  the sets your board **already completes** (the completable partial sets live in the Sets sidebar).
+  A **Builds** row keeps **multiple named
   builds** (new / duplicate / rename / delete + a switcher); the active build **autosaves** to
   `localStorage` continuously (and the active tab is remembered), so switching never loses work —
   all works from `file://` in Chrome/Firefox.

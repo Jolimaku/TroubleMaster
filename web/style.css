@@ -500,14 +500,6 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
   border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px;
 }
 .bld-set-row:hover { background: var(--bg3); }
-.bld-set-row.addable { cursor: pointer; }
-.bld-set-row.addable:hover { background: var(--bg3); box-shadow: inset 2px 0 0 var(--accent); }
-.bld-set-fold > summary {
-  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  margin: 8px 2px 2px; padding-top: 8px; border-top: 1px solid var(--line);
-  cursor: pointer; list-style-position: inside;
-}
-.bld-set-fold[open] > summary { color: var(--fg); }
 .bld-set-name { color: var(--fg); font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bld-set-icons { display: flex; gap: 5px; flex: none; }
 .bld-setmastery {
@@ -545,7 +537,10 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
 }
 .bld-side-count { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
 .bld-side-count.bld-side-clear { color: var(--accent); cursor: pointer; }
-.bld-side-list { overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+/* bleed into the sidebar's 10px right padding so the scrollbar parks in that gutter (padding-right
+   keeps the rows clear of it) instead of overlapping the rightmost set diamond */
+.bld-side-list { overflow-y: auto; display: flex; flex-direction: column; gap: 3px;
+  margin-right: -10px; padding-right: 10px; }
 .bld-item {
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
   border: 1px solid var(--line); border-left: 3px solid currentColor; border-radius: 5px;
