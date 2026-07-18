@@ -2733,7 +2733,12 @@
     list.replaceChildren();
     const q = bld.q;
     if (bld.sideTab === "masteries") {
+      // masteries already on the board (user-placed + inherent fixed) drop out of the picker
+      const pc = unitById[bld.pcId];
+      const onBoard = new Set(BOARD_CATS.flatMap(c => bld.placed[c] || []));
+      (pc && pc.fixed || []).forEach(f => onBoard.add(f.id));
       const items = DATA.masteries.filter(m => bldAccessible(m, types)
+        && !onBoard.has(m.id)
         && (!bld.catFilter || m.categoryRaw === bld.catFilter)
         && (!q || m._blob.includes(q)));
       items.sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1);
