@@ -1596,6 +1596,12 @@
     return true;
   }
 
+  // the mastery sets fully assembled on the board — every component in `placedIds` (the set of
+  // user-placed mastery ids). A componentless set never counts. Single source of truth for
+  // set completion, shared by the limit bonuses, the set panel, and the board's active-set marker.
+  const completedSets = placedIds =>
+    DATA.sets.filter(s => s.components.length && s.components.every(c => placedIds.has(c.id)));
+
   // sum the limit bonuses from every placed mastery (shared_pc.lua Get_ExtraMax*/Get_Max*Cost):
   // slot bonuses per category (+ "all"), a cost-cap bonus applied to every category, and total TP.
   // A completed mastery set also grants its set-bonus mastery (Category=="Set", id == set id),
@@ -1615,10 +1621,7 @@
     (bld.evo || []).forEach(id => { if (id) apply(mods[id]); });   // beast evo / drone AI-upgrade picks
     if (bld.craft) apply(mods[bld.craft]);                          // drone construction craft-unique pick
     const placedIds = new Set(BOARD_CATS.flatMap(c => bld.placed[c] || []));
-    DATA.sets.forEach(s => {                          // completed-set bonus masteries
-      if (s.components.length && mods[s.id] && s.components.every(c => placedIds.has(c.id)))
-        apply(mods[s.id]);
-    });
+    completedSets(placedIds).forEach(s => { if (mods[s.id]) apply(mods[s.id]); });   // completed-set bonus masteries
     return b;
   }
 
@@ -2502,6 +2505,11 @@
     const broken = [];
     const slotById = {};                // placed mastery id -> its slot element (for set highlight)
     const setIconsById = {};            // placed mastery id -> its set-panel diamonds (reverse highlight)
+    // components of every completed set — their board slots get a violet left border marking them
+    // as part of an active set.
+    const inSetIds = new Set();
+    completedSets(new Set(BOARD_CATS.flatMap(c => bld.placed[c] || [])))
+      .forEach(s => s.components.forEach(c => inSetIds.add(c.id)));
     // light up the set-panel diamonds for a mastery while hovering it on the board (mirrors the game)
     const setHi = (id, on) => (setIconsById[id] || []).forEach(ic => ic.classList.toggle("mastery-hi", on));
     const pcFixed = pc.fixed || [];
@@ -2545,7 +2553,7 @@
       const body = el("div.bld-slots");
       const userOpen = Math.max(0, lim.unlocked - fixedHere.length);
       placed.forEach((m, i) => {
-        const slot = el("div.bld-slot.filled" + (i >= userOpen ? ".over" : ""),
+        const slot = el("div.bld-slot.filled" + (i >= userOpen ? ".over" : "") + (inSetIds.has(m.id) ? ".in-set" : ""),
           { title: t("bld.slotRemove", "Remove") },
           starToggle(m.id, "bld-star"),
           el("span.bld-slot-name", { text: m.name }),
@@ -2625,7 +2633,7 @@
       .filter(s => s.components.length)
       .map(s => ({ s, matched: s.components.filter(c => placedIds.has(c.id)).length }))
       .filter(x => x.matched > 0);
-    const full = scored.filter(x => x.matched === x.s.components.length).map(x => x.s);
+    const full = completedSets(placedIds);
     // partials sorted by how many you're still MISSING (so "1 away" sets group together
     // regardless of how many components the set has), then by matched / name as tiebreak
     const partial = scored
@@ -2754,7 +2762,7 @@
       items.sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1);
       list.appendChild(countLine(tf("bld.accessibleSets", "{n} accessible sets", { n: items.length })));
       items.forEach(s => {
-        const it = el("div.bld-item", {},
+        const it = el("div.bld-item.bld-item-set", {},
           el("span.bld-item-name", { text: s.name }),
           el("span.bld-item-meta", { text: `${s.components.length} pc` }));
         it.addEventListener("mouseenter", () => showTip(it, box => buildSetTip(s, box)));

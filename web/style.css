@@ -8,6 +8,7 @@
   --muted: #8b97a8;
   --accent: #e8b24a;
   --accent2: #5aa9e6;
+  --set-accent: #b18cf0;   /* mastery-set violet (panel header, board active-set bar, sidebar set items) */
   --chip: #2a3340;
 }
 * { box-sizing: border-box; }
@@ -493,7 +494,7 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
 /* both slot highlights (set-row hover and direct mastery hover) glow in the slot's category colour */
 .bld-slot.set-hi { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
 /* mastery-set panel (6th cell) — violet accent like the in-game panel */
-.bld-setcol { color: #b18cf0; }
+.bld-setcol { color: var(--set-accent); }
 .bld-set-row {
   display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px;
@@ -522,6 +523,8 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
 .bld-slot.fixed .bld-slot-name, .bld-slot.fixed .bld-slot-cost { color: var(--accent); }
 .bld-slot.filled:hover { border-color: currentColor; }
 .bld-slot.filled.over { border-color: #e5594e; background: #3a1f1f; }
+/* placed mastery that completes an active set — violet right bar (set-panel colour) */
+.bld-slot.filled.in-set { border-right: 3px solid var(--set-accent); }
 .bld-slot-name { color: var(--fg); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bld-slot-cost { color: var(--muted); font-variant-numeric: tabular-nums; padding-left: 8px; }
 /* sidebar */
@@ -549,6 +552,7 @@ mark { background: var(--accent); color: #14181f; border-radius: 2px; }
   padding: 5px 9px; cursor: pointer; font-size: 13px;
 }
 .bld-item:hover { background: var(--bg3); }
+.bld-item-set { color: var(--set-accent); }   /* set rows carry no category colour — tint the left bar violet like the set panel */
 .bld-item-name { color: var(--fg); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bld-item-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
 @media (max-width: 1000px) {
