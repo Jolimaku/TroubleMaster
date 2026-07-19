@@ -19,7 +19,7 @@
       <button class="tab" data-view="masteries" data-group="class" data-i18n="tab.classTraits">Class Traits</button>
       <button class="tab" data-view="masteries" data-group="misc" data-i18n="tab.misc">Misc</button>
       <button class="tab" data-view="sets" data-i18n="tab.sets">Mastery Sets</button>
-      <button class="tab" data-view="equipsets" data-i18n="tab.equipsets">Equipment Sets</button>
+      <button class="tab" data-view="items" data-i18n="tab.items">Items</button>
       <button class="tab" data-view="abilities" data-i18n="tab.abilities">Abilities</button>
       <button class="tab" data-view="dialogue" data-i18n="tab.dialogue">Dialogue</button>
       <button class="tab" data-view="quests" data-i18n="tab.quests">Quests</button>
@@ -34,6 +34,16 @@
     </label>
     <label class="filter" id="cat-filter-label"><span data-i18n="filter.category">Category</span>
       <select id="cat-filter"><option value="" data-i18n="filter.all">All</option></select>
+    </label>
+    <label class="filter" id="rank-filter-label" hidden><span data-i18n="filter.rarity">Rarity</span>
+      <select id="rankmin-filter"></select>
+      <span class="lv-dash">–</span>
+      <select id="rankmax-filter"></select>
+    </label>
+    <label class="filter" id="lv-filter-label" hidden><span data-i18n="filter.level">Level</span>
+      <select id="lvmin-filter"></select>
+      <span class="lv-dash">–</span>
+      <select id="lvmax-filter"></select>
     </label>
     <button type="button" id="star-filter" class="star-filter" hidden data-i18n-title="filter.starredTitle" title="Show only starred masteries">
       <span class="star-ico">★</span><span data-i18n="filter.starred">Starred</span><span id="star-count" class="star-count"></span>
@@ -70,9 +80,20 @@
     <div id="set-grid" class="grid"></div>
   </main>
 
-  <!-- Equipment Sets: per-set piece-count bonuses -->
-  <main id="view-equipsets" class="view">
-    <div id="equipset-grid" class="grid"></div>
+  <!-- Items: equipment/craftable reference with stats, identify suffixes and sources -->
+  <main id="view-items" class="view">
+    <div class="subtabs" id="item-subtabs">
+      <button class="subtab active" data-cat="Weapon" data-i18n="itemcat.weapon">Weapon</button>
+      <button class="subtab" data-cat="WeaponNPC" data-i18n="itemcat.weaponNpc">NPC Weapon</button>
+      <button class="subtab" data-cat="Armor" data-i18n="itemcat.armor">Armor</button>
+      <button class="subtab" data-cat="Accessory" data-i18n="itemcat.accessory">Accessory</button>
+      <button class="subtab" data-cat="Consume" data-i18n="itemcat.consume">Consumable</button>
+      <button class="subtab" data-cat="Material" data-i18n="itemcat.material">Material</button>
+      <button class="subtab" data-cat="Tool" data-i18n="itemcat.tool">Tool</button>
+      <button class="subtab" data-cat="Machine" data-i18n="itemcat.machine">Machine</button>
+      <button class="subtab" data-cat="Sets" data-i18n="tab.equipsets">Equipment Sets</button>
+    </div>
+    <div id="items-list" class="items-list"></div>
   </main>
 
   <!-- Abilities: searchable/sortable reference of every named ability -->
@@ -122,6 +143,8 @@
       <button id="bld-rename" class="bld-iobtn" title="Rename this build" data-i18n="bld.rename" data-i18n-title="bld.rename.title">Rename</button>
       <button id="bld-delete" class="bld-iobtn" title="Delete this build" data-i18n="bld.delete" data-i18n-title="bld.delete.title">Delete</button>
       <button id="bld-export" class="bld-iobtn" title="Share this build — in-game code + link" data-i18n="bld.export" data-i18n-title="bld.export.title">Export</button>
+      <button id="bld-undo" class="bld-iobtn" title="Undo the last change to this build (Ctrl+Z)" data-i18n="bld.undo" data-i18n-title="bld.undo.title">Undo</button>
+      <button id="bld-redo" class="bld-iobtn" title="Redo the last undone change (Ctrl+Shift+Z)" data-i18n="bld.redo" data-i18n-title="bld.redo.title">Redo</button>
       <span id="bld-summary" class="count"></span>
     </div>
     <div id="bld-io" class="bld-io"></div>
@@ -139,6 +162,7 @@
   <script src="../ui.kor.js"></script>
   <script src="../i18n.js"></script>
   <script src="../data.kor.js"></script>
+  <script src="../items.kor.js"></script>
   <script src="../codemap.js"></script>
   <script src="../app.js"></script>
 </body>

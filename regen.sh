@@ -30,6 +30,8 @@ for lang in $LANGS; do
   if [ "$lang" = eng ]; then out="output"; else out="output-$lang"; fi
   echo ">> extract_masteries.py --lang $lang --out $out"
   "$PYTHON" extract_masteries.py --game "$GAME" --data "$DATA" --lang "$lang" --out "$out"
+  echo ">> extract_items.py --lang $lang --out $out"
+  "$PYTHON" extract_items.py --game "$GAME" --data "$DATA" --lang "$lang" --out "$out"
 done
 
 echo ">> gen_pages.py (stamp each <lang>/index.html from web/index.html)"

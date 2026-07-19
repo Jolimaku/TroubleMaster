@@ -19,6 +19,7 @@ Missions with no resolvable case (JointTraining / test / PvP maps) are dropped.
 import os
 import re
 import glob
+import collections
 import xml.etree.ElementTree as ET
 
 TIER_RANK = {"All": 0, "Normal+": 1, "Hard+": 2, "Dialog": 3}  # lower = more available
@@ -362,6 +363,77 @@ def dialog_labels_for(enemy_dialog, monster_id, mid):
        mission), with grade-up fold. Labels are already resolved, so returned as-is."""
     slot = enemy_dialog.get(monster_id) or enemy_dialog.get(GRADEUP_RE.sub("", monster_id)) or {}
     return sorted(slot.get(mid, ()))
+
+
+def collapse_enemy_encounters(enemy_sources, enemy_missions, mission_info, placed,
+                              enemy_dialog, jt_teams):
+    """Collapse a list of raw {"type":"Enemy","name","id","lv"} sources into the web shape:
+    one entry per display name with a level range and its resolved mission/Joint-Training
+    encounters. Shared by the mastery (learn-by-analysing) and item (drop-table) pipelines so
+    both surface identical "where do I fight this enemy" data. Returns (enemies, dropped):
+      enemies  - [{"name", "lv":[min,max]|None, "missions":[{name,level,case[,diff|dialog]}|
+                   {name:"Joint Training", training:True[, teams:[...]]}]}] sorted by name
+      dropped  - {monster_id: display_name} for names that resolved to NO encounter at all
+                 (never fightable) and were therefore omitted — a diagnostic for the caller.
+    An enemy that resolves to no mission and no Joint Training is dropped rather than listed as
+    a phantom carrier (see DATAMINING.md "Enemies with no mission appearance")."""
+    enemy_lv = collections.defaultdict(list)
+    enemy_ids = collections.defaultdict(set)
+    for s in enemy_sources:
+        if s.get("type") != "Enemy":
+            continue
+        enemy_ids[s["name"]].add(s["id"])
+        try:
+            enemy_lv[s["name"]].append(int(s["lv"]))
+        except (TypeError, ValueError):
+            pass
+
+    enemies, dropped = [], {}
+    for n in sorted(enemy_ids):
+        v = enemy_lv.get(n, [])
+        # union missions (by mission id) across all monster ids sharing this name, keeping the
+        # most-available difficulty tier per mission
+        mis, mis_dialog, training, jt_titles = {}, {}, False, set()
+        for eid in enemy_ids[n]:
+            if eid in jt_teams:      # a clone in a *live* Joint Training team (dev-only Beast
+                training = True      # packs are absent from jt_teams, so they don't count)
+                jt_titles.update(jt_teams[eid])
+            for mid, tier in missions_for(enemy_missions, placed, eid).items():
+                cur = mis.get(mid)
+                mis[mid] = tier if cur is None or TIER_RANK.get(tier, 0) < TIER_RANK.get(cur, 0) else cur
+                labels = dialog_labels_for(enemy_dialog, eid, mid)
+                if labels:
+                    mis_dialog.setdefault(mid, set()).update(labels)
+        missions = []
+        for mid, tier in mis.items():
+            info = mission_info.get(mid)
+            if not info:
+                continue
+            rec = {"name": info["title"], "level": info["level"], "case": info["case"]}
+            if tier == "Dialog":
+                label = ", ".join(sorted(mis_dialog.get(mid, [])))
+                rec["dialog"] = label or True
+            elif tier != "All":
+                rec["diff"] = tier
+            missions.append(rec)
+        # dedupe identical (title, level, case, diff/dialog) and sort by level then name
+        seen, uniq = set(), []
+        for r in sorted(missions, key=lambda x: (x["level"], x["name"])):
+            k = (r["name"], r["level"], r["case"], r.get("diff"), r.get("dialog"))
+            if k not in seen:
+                seen.add(k)
+                uniq.append(r)
+        if training:                 # fightable in the Joint Training (Joint Drill) mode
+            rec = {"name": "Joint Training", "training": True}
+            if jt_titles:            # tag with the team(s) whose roster this clone is in
+                rec["teams"] = sorted(jt_titles)
+            uniq.append(rec)
+        if not uniq:                 # no encounter anywhere -> phantom carrier, drop it
+            for eid in enemy_ids[n]:
+                dropped[eid] = n
+            continue
+        enemies.append({"name": n, "lv": [min(v), max(v)] if v else None, "missions": uniq})
+    return enemies, dropped
 
 
 def _choice_index(root, dic):

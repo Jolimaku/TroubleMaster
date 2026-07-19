@@ -39,9 +39,10 @@ against, see [`DATAMINING.md` → How the data is stored](DATAMINING.md#how-the-
 
 3. Regenerate everything with one command — **`regen.sh`** (Git Bash / macOS / Linux) or
    **`regen.bat`** (Windows `cmd`). This rebuilds `web/data.js`, `web/data.kor.js`,
-   `web/codemap.js` and the per-language pages (it runs `extract_masteries.py` for each
-   language then `gen_pages.py`). Edit the `GAME` / `DATA` / `LANGS` variables at the top
-   of the script, or override per-run via env vars:
+   `web/items.js`, `web/items.kor.js`, `web/codemap.js` and the per-language pages (it runs
+   `extract_masteries.py` **and `extract_items.py`** for each language, then `gen_pages.py`).
+   Edit the `GAME` / `DATA` / `LANGS` variables at the top of the script, or override per-run via
+   env vars:
 
    ```
    ./regen.sh                                  # defaults (game on E:\SteamLibrary\…, Unpack/ beside the script)
@@ -54,6 +55,8 @@ against, see [`DATAMINING.md` → How the data is stored](DATAMINING.md#how-the-
    ```
    python extract_masteries.py                 # English → web/data.js + web/codemap.js + output/
    python extract_masteries.py --lang kor --out output-kor   # Korean → web/data.kor.js
+   python extract_items.py                     # English → web/items.js + output/items.json
+   python extract_items.py --lang kor --out output-kor       # Korean → web/items.kor.js
    python gen_pages.py                          # stamp web/<lang>/index.html from web/index.html
    ```
 
@@ -70,7 +73,9 @@ against, see [`DATAMINING.md` → How the data is stored](DATAMINING.md#how-the-
 | `masteries.json` | every mastery (~2,500, incl. internal) with full structured sources |
 | `masteries.csv` / `masteries.md` | the ~2,000 named masteries with sources (readable) |
 | `mastery_sets.json` / `.csv` / `.md` | 611 sets with components + bonus text |
+| `items.json` / `items.csv` | every obtainable item (~1,460) with stats, identify-suffix pools, and flat acquisition `sources` (from `extract_items.py`); CSV is equippable gear only |
 | `web/data.js` | denormalized data for the interactive page (named masteries only), plus the Board Builder tables (`jobs`, `pcs`, `espSlots`, `boardMods`, `slotUnlock`). Its `generated` field is the **data-extraction date** (modtime of the unpacked `Mastery.xml`, via `source_date()`), *not* the build date — so rebuilding an unchanged snapshot yields no diff; it only advances when the game is re-unpacked. |
+| `web/items.js` | denormalized item data for the Items tab (`window.TS_ITEMS`) — items with sources grouped by channel (drops resolved to missions), plus the `suffix_pools` / `suffixes` / `shops` / `stat_meta` lookups |
 
 ## Interactive webpage (`web/`)
 
@@ -135,13 +140,31 @@ Tabs:
   search), so you see just that mastery. (The reverse — a mastery's Set chips → the Sets tab —
   uses the global search, as the card view has no columns.)
   Search matches names, descriptions, set/component names and sources.
-- **Equipment Sets** — the gear-set bonuses (`EquipmentSet` category, split out of the
-  Masteries table into their own tab). One searchable card per set, grouped from the
-  per-threshold masteries (named either `"<Set> - Set <N>"` or `"<Set> - <N>-piece Set
-  Bonus"` in English, or `"<Set> - <N> 세트"` in Korean), listing each piece-count
-  threshold's bonus (e.g. Arms Alchemy: 2pc / 3pc / 5pc). Grouping keys off the localized
-  name suffix, so `_parse_eqset` in `extract_masteries.py` needs a regex per language —
-  add one when localizing, or every threshold becomes its own ungrouped card.
+- **Items** — every obtainable item (from `extract_items.py` → `web/items.js`), in **category
+  subtabs**: Weapon / NPC Weapon / Armor / Accessory / Consumable / Material / Tool / Machine, plus
+  **Equipment Sets**. Weapons split PC-equippable vs NPC-only off `object.xml` `PC_* EnableEquipWeapon`.
+  A shared top bar filters by **Type**, **Rarity** (defaults to Rare-and-up — Poor/Common/Uncommon
+  hidden), and, on the gear subtabs, a **Level** min–max range (0–60, step 5, clamped so min ≤ max).
+  Items group into a section per Type (heading + count), sorted by level → rarity (rarest first) →
+  name. Each card is rarity-coloured and expands to: its stat block, flavor, a granted-**ability**
+  pill (hover tip, cross-links to Abilities), the inlined effect text of a granted device-mastery, its
+  **set** (a hover card of the same per-piece bonuses as the Equipment Sets subtab), and — for
+  identifiable gear — the **possible suffixes** it can roll (the Type's identify pool filtered to the
+  item's rank band, each an inline hover pill showing the stat ranges). Plus every way to **get it**:
+  enemy drops (resolved to the missions each enemy appears in, exactly like the Masteries tab),
+  crafting (the recipe's materials + its **familiarity-tree** unlock — starter / "master X first" /
+  quest reward / raid-gated / no-unlock), shops (price + currency), starting equipment, quest &
+  civilian-rescue rewards, story/tutorial gifts, stage loot (→ the mission it's found in), loot boxes
+  (→ the `Box_Lv<N>` tier), and Thief pocket-steal. Items nothing can grant (cut/unused data, engine
+  fallback weapons, civilian-worn flavor) are dropped at extraction. The full item data model and every
+  source channel are in [`DATAMINING.md` → Items, gear, and the identify
+  system](DATAMINING.md#items-gear-and-the-identify-system).
+  - The **Equipment Sets** subtab lists the gear-set bonuses — one card per set, each piece-count
+    threshold's bonus (e.g. Arms Alchemy: 2pc / 3pc / 5pc) — grouped from the per-threshold
+    `EquipmentSet` masteries (named `"<Set> - Set <N>"` / `"<Set> - <N>-piece Set Bonus"` in English,
+    `"<Set> - <N> 세트"` in Korean). Grouping keys off the localized name suffix, so `_parse_eqset` in
+    `extract_masteries.py` needs a regex per language — add one when localizing, or every threshold
+    becomes its own ungrouped card.
 - **Abilities** — the **player-usable** combat abilities: a searchable/sortable table with
   **Slot** · **Type** (Attack/Support/Heal/…) · **Element** · action **Cost** · **CD** · **Cast** ·
   resolved **effect**. Slot / Type / Element get per-column dropdown filters, Name / effect a

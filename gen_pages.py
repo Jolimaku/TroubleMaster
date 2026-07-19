@@ -41,7 +41,8 @@ def generate(cfg):
     html = re.sub(r'<a class="lang-switch[^>]*>.*?</a>', cfg["switch"], html, count=1)
     # 4. scripts: prefix "../", swapping the English UI-string + data files for the localized ones.
     #    The regex matches only bare-filename srcs (no "/"), i.e. exactly the page's own scripts.
-    rename = {"ui.en.js": f"ui.{cfg['suffix']}.js", "data.js": f"data.{cfg['suffix']}.js"}
+    rename = {"ui.en.js": f"ui.{cfg['suffix']}.js", "data.js": f"data.{cfg['suffix']}.js",
+              "items.js": f"items.{cfg['suffix']}.js"}
     html = re.sub(r'<script src="([^"/]+)"></script>',
                   lambda m: f'<script src="../{rename.get(m.group(1), m.group(1))}"></script>', html)
     out = os.path.join(ROOT, "web", cfg["dir"], "index.html")

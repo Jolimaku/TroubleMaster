@@ -33,7 +33,8 @@ import xml.etree.ElementTree as ET
 import resolve_desc
 from resolve_desc import (resolve_description, stat_summary, describe_buff, immune_debuff_summary,
                           neutralize_field_summary, strip_refs, ref_markup, indent_block)
-from missions import build_enemy_missions, missions_for, dialog_labels_for, TIER_RANK
+from missions import (build_enemy_missions, missions_for, dialog_labels_for, TIER_RANK,
+                      collapse_enemy_encounters)
 from dialog_map import (build_dialog_map, mastery_grants, mastery_opens, parse_mission_opens,
                         company_opens)
 from quests import build_quests, quest_missions
@@ -1623,6 +1624,20 @@ def main():
                    if owners <= excluded_jobs
                    and not any(s["type"] == "Enemy" for s in sources.get(bm, []))}
 
+    # module craft cost — each drone board module is *crafted* (after it unlocks) from a fixed material
+    # list, defined as a `Type="Module"` Technique in Technique.xml whose class name == the module
+    # mastery name; `<RequireItems> → property[Item, Count]` is the in-game module-crafting screen.
+    module_craft = {}
+    for c in idspace(os.path.join(xml, "Technique.xml"), "Technique").findall("class"):
+        if c.get("Type") != "Module":
+            continue
+        ri = c.find("RequireItems")
+        mats = [{"name": dic.get(f"Item/{p.get('Item')}/Base_Title") or p.get("Item"),
+                 "count": int(p.get("Count") or 1)}
+                for p in (ri.findall("property") if ri is not None else []) if p.get("Item")]
+        if mats:
+            module_craft[c.get("name")] = mats
+
     # --- masteries -----------------------------------------------------------
     masteries = []
     for c in idspace(os.path.join(xml, "Mastery.xml"), "Mastery").findall("class"):
@@ -1664,6 +1679,8 @@ def main():
             # the ability this mastery grants/modifies (display name), for the Abilities cross-link
             "grantsAbility": dic.get(f"Ability/{c.get('Ability')}/Title")
             if c.get("Ability") not in (None, "None") else None,
+            # drone board modules: the fixed materials to craft the module (None for non-modules)
+            "craftCost": module_craft.get(n),
             # buff/group/mastery/ability refs are inline sentinel markup in `description` — the web
             # renders positioned chips from those.
         }
@@ -1887,71 +1904,15 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
             continue                      # internal/object metadata — not a player mastery
         if m.get("developing"):
             continue                      # cut/unfinished (Developing technique, no real source)
-        # collapse enemy sources to unique names with a level range + missions
-        enemy_lv = collections.defaultdict(list)
-        enemy_ids = collections.defaultdict(set)
-        for s in m["sources"]:
-            if s["type"] == "Enemy":
-                enemy_ids[s["name"]].add(s["id"])
-                try:
-                    enemy_lv[s["name"]].append(int(s["lv"]))
-                except (TypeError, ValueError):
-                    pass
-        enemies = []
-        for n in sorted(enemy_ids):
-            v = enemy_lv.get(n, [])
-            # union missions (by mission id) across all monster ids sharing this name,
-            # keeping the most-available difficulty tier per mission
-            mis = {}
-            mis_dialog = {}
-            training = False
-            jt_titles = set()           # localized Joint Training team(s) this enemy belongs to
-            for eid in enemy_ids[n]:
-                if eid in jt_teams:     # a clone in a *live* Joint Training team (dev-only Beast
-                    training = True     # packs are absent from jt_teams, so they don't count)
-                    jt_titles.update(jt_teams[eid])
-                for mid, tier in missions_for(enemy_missions, placed, eid).items():
-                    cur = mis.get(mid)
-                    mis[mid] = tier if cur is None or _tier_rank(tier) < _tier_rank(cur) else cur
-                    labels = dialog_labels_for(enemy_dialog, eid, mid)
-                    if labels:
-                        mis_dialog.setdefault(mid, set()).update(labels)
-            missions = []
-            for mid, tier in mis.items():
-                info = mission_info.get(mid)
-                if not info:
-                    continue
-                rec = {"name": info["title"], "level": info["level"], "case": info["case"]}
-                if tier == "Dialog":
-                    label = ", ".join(sorted(mis_dialog.get(mid, [])))
-                    rec["dialog"] = label or True
-                elif tier != "All":
-                    rec["diff"] = tier
-                missions.append(rec)
-            # dedupe identical (title, level, case, diff/dialog) and sort by level then name
-            seen, uniq = set(), []
-            for r in sorted(missions, key=lambda x: (x["level"], x["name"])):
-                k = (r["name"], r["level"], r["case"], r.get("diff"), r.get("dialog"))
-                if k not in seen:
-                    seen.add(k)
-                    uniq.append(r)
-            if training:                  # fightable in the Joint Training (Joint Drill) mode
-                rec = {"name": "Joint Training", "training": True}
-                if jt_titles:             # tag with the team(s) whose roster this clone is in
-                    rec["teams"] = sorted(jt_titles)
-                uniq.append(rec)
-            # Blanket rule: an enemy that resolves to NO encounter (no mission, no Joint Training)
-            # after every appearance mechanism (static/neutral placement, DrakyEgg hatching, boss
-            # summons, dialog flips) is not a real source — you can never fight it — so drop it
-            # rather than list a phantom carrier. The build-time diagnostic below reports the dropped
-            # set and flags any board mastery this orphans, so a new game-update spawn mechanism
-            # surfaces as a warning instead of silently vanishing. (See DATAMINING.md "Enemies
-            # with no mission appearance".)
-            if not uniq:
-                for eid in enemy_ids[n]:
-                    dropped_carriers[eid] = n
-                continue
-            enemies.append({"name": n, "lv": [min(v), max(v)] if v else None, "missions": uniq})
+        # collapse enemy sources to unique names with a level range + resolved encounters
+        # (shared with the item drop-table pipeline — see missions.collapse_enemy_encounters).
+        # Enemies that resolve to no encounter at all are dropped as phantom carriers; the
+        # build-time diagnostic below reports the dropped set and flags any board mastery this
+        # orphans, so a new game-update spawn mechanism surfaces as a warning instead of silently
+        # vanishing. (See DATAMINING.md "Enemies with no mission appearance".)
+        enemies, dropped = collapse_enemy_encounters(
+            m["sources"], enemy_missions, mission_info, placed, enemy_dialog, jt_teams)
+        dropped_carriers.update(dropped)
         chars = sorted(({"character": s["character"], "job": s["job"], "lv": int(s["lv"] or 0),
                          **({"classBasic": True} if s.get("classBasic") else {})}
                         for s in m["sources"] if s["type"] == "Character"),
@@ -2032,6 +1993,8 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
             wm["research"] = research
         if m.get("grantsAbility"):                 # omit when null (only ~53 of ~1900 carry one)
             wm["grantsAbility"] = m["grantsAbility"]
+        if m.get("craftCost"):                     # drone modules: fixed materials to craft the module
+            wm["craftCost"] = m["craftCost"]
         if m.get("exclusive"):                     # mutually-exclusive masteries (rare; e.g. Descendants)
             wm["exclusive"] = m["exclusive"]
         # orphan tripwire: a board-placeable mastery (normal/module) with no remaining source of any

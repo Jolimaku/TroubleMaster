@@ -3,32 +3,26 @@
 Open / deferred items for the extractor + web tool. (Status: ☐ open · ◐ partial · ✓ done-for-reference.)
 
 ## Items & crafting
-- ☐ **Mission mail rewards (`GiveSystemMail*`).** `missionResult_Custom.lua` delivers per-mission
-  rewards via **system mail** — `dc:GiveSystemMailOneKey(company, '<MailId>')` (×10) and one
-  parameterised `dc:GiveSystemMail(...)`. The mail bodies live in `SystemMail.xml`, several carrying
-  `AttachItem`/`AttachItemCount` (e.g. `VHPD_Reward_Wanted_Hansando`, `MissionClear_Tutorial_PurpleBackStreet`),
-  and `Kim01` delivers a `Statement_Mastery` item by call arg. Surface these as a per-mission
-  **reward** channel once the items model exists (they resolve to item ids, so this rides on the
-  unique-items / equipment work below). Found during the `missionResult_Custom.lua` mining.
-- ☐ **Unique items + their sources.** Add data/UI for unique (high-grade/legendary) items and
-  where each comes from. Sources are twofold: **boss/enemy drops** and **crafted at high
-  mastery** (crafter expertise level). Likely data: `Item.xml` (grade/rarity), enemy loot/drop
-  tables for the boss drops (same loot system the modding tool's "Modify Loot" edits), and
-  crafting recipes for the high-expertise crafts. Show each unique item with its drop source(s)
-  and/or its recipe.
-- ☐ **Crafting.** Add the crafting system — recipes (materials + required crafter
-  expertise/technique level + output), likely from `Craft.lua` / `Technique.xml` / recipe
-  tables. Cross-links with the unique-items sources above and the drone-module creation cost
-  (Modules tab) — module creation is part of this same system.
-- ☐ **Individual equipment items.** Beyond Equipment *Sets*, add individual gear with stats —
-  weapons / armor / accessories (`Item.xml` equipment entries, the same data the modding tool's
-  Equipment Editor edits), with stats, grade/rarity, and slot. Overlaps the unique-items item
-  above (uniques are a subset).
-- ☐ **Show drone-module *creation* cost.** The Modules tab currently shows each module's board
-  **Output** cost (`Mastery.xml` `Cost`). Also surface the cost to *create/craft* the module
-  (materials / resources / research), which is distinct. Locate the source first — likely the
-  crafting/`Technique` recipe or a module-production table — extract it, and add a column /
-  row-detail line in the Modules tab.
+- ✓ *(done)* **Unique items + individual equipment + crafting.** Built as the **Items tab**
+  (`extract_items.py` → `web/items.js`; see README "Items" and `DATAMINING.md` "Items, gear, and the
+  identify system"). Every obtainable item (~1,460) with stats, rarity, slot/type, the identify-suffix
+  system, and **full acquisition sources**: enemy drops (resolved to the missions each enemy appears
+  in), crafting (recipe materials + the **familiarity-tree** unlock — starter / master-a-predecessor /
+  quest / Pascal-raid-gated / no-unlock), shops (price + currency), starting equipment, quest &
+  civilian-rescue rewards, story/tutorial gifts, stage loot (→ mission), loot boxes (→ `Box_Lv<N>`
+  tier), and Thief pocket-steal. Uniques are just the high-rarity subset; not-obtainable/cut items are
+  dropped at extraction. (Originally three separate items: unique-items, crafting, individual-equipment.)
+- ✓ *(done)* **Mission mail rewards (`GiveSystemMail*` / `SystemMail.xml` `AttachItem`).** Investigated
+  and **deliberately not surfaced** — no value. The `AttachItem` values are almost all `Vill` (money),
+  `Statement_Mastery`/`Statement_Module` (training/module points), and per-character costumes (we drop
+  those); the only real items (a few materials, `Extractor`, `ToyBox_Rare`) are **already sourced** via
+  craft/shop/drop/rescue, so a mail channel would gain zero new sources.
+- ✓ *(done)* **Show drone-module *creation* cost in the Modules tab.** Each board module is crafted
+  (after it unlocks) from a fixed material list — a `Type="Module"` **Technique** (`Technique.xml`)
+  whose class name == the module mastery name, with `<RequireItems> → property[Item, Count]`.
+  `extract_masteries.py` attaches it as `craftCost` on the module masteries; the Modules-tab row detail
+  shows a **"Crafting materials: …"** line (alongside the existing board Output cost). 112 modules.
+  (Character masteries have no such cost — the 842 `Type="Mastery"` techniques carry no `RequireItems`.)
 
 ## Class Traits tab
 - ☐ **List characters per class.** Consider adding, to each Class trait's row detail, the

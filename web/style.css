@@ -221,6 +221,7 @@ tr.detail td { padding: 4px 16px 16px; }
 .detail .ability-stats { color: var(--muted); margin-bottom: 12px; }
 .detail .chiplist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .detail .ability-link { margin-top: 8px; }
+.detail .craft-cost { margin-top: 6px; font-size: 13px; color: var(--muted); }
 /* enemy list carries per-mission appearance info (level badge + case colour) */
 .enemy-src { columns: 1; }
 .enemy-src > div { margin-bottom: 8px; }
@@ -301,6 +302,55 @@ tr.detail td { padding: 4px 16px 16px; }
 .equip-n { flex: none; min-width: 34px; color: var(--accent); font-weight: 700;
   font-variant-numeric: tabular-nums; }
 .equip-desc { white-space: pre-wrap; color: var(--fg); }
+
+/* ---- items view ---- */
+.lv-dash { color: var(--muted); margin: 0 2px; }
+.items-list { display: flex; flex-direction: column; gap: 22px; }
+.type-section { }
+.type-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px;
+  font-size: 15px; color: var(--fg); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.type-heading-count { color: var(--muted); font-size: 12px; font-weight: 400;
+  font-variant-numeric: tabular-nums; }
+.items-grid { align-items: stretch; }          /* cards in a row share the tallest one's height */
+.item-card { --rank: var(--muted); border-left: 3px solid var(--rank); padding: 12px 14px; position: relative; }
+.item-card.open { z-index: 5; }                 /* lift the open card so its detail overlays neighbours */
+.item-card.rank-Poor     { --rank: #8b97a8; }
+.item-card.rank-Common   { --rank: #cfd6e0; }
+.item-card.rank-Uncommon { --rank: #5cc98b; }
+.item-card.rank-Rare     { --rank: #5aa9e6; }
+.item-card.rank-Epic     { --rank: #b18cf0; }
+.item-card.rank-Legend   { --rank: #e8b24a; }
+.item-card.rank-Set      { --rank: #39c6b0; }
+.item-card.rank-Unique   { --rank: #e8688a; }
+.item-card.rank-Quest    { --rank: #8b97a8; }
+.item-summary { cursor: pointer; }
+.item-head { display: flex; align-items: baseline; gap: 8px; justify-content: space-between; }
+.item-name { margin: 0; font-size: 15px; color: var(--fg); }
+.item-rank { flex: none; font-size: 11px; font-weight: 700; color: var(--rank); text-transform: uppercase; letter-spacing: .03em; }
+.item-meta { margin: 2px 0 0 !important; }
+.item-stats { display: flex; flex-wrap: wrap; gap: 3px 14px; margin-top: 8px; }
+.item-stat { font-size: 12px; white-space: nowrap; }
+.item-stat .stat-lbl { color: var(--muted); }
+.item-stat .stat-val { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 4px; }
+/* the detail drops down as an overlay (out of grid flow) so expanding a card never reflows the grid */
+.item-detail {
+  position: absolute; top: 100%; left: -3px; right: -3px; z-index: 5; margin-top: 4px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 14px 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.item-detail h4 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.item-detail h4:first-child { margin-top: 0; }
+.item-grant { font-size: 13px; margin: 3px 0; }
+.item-effect { font-size: 13px; color: var(--fg); white-space: pre-wrap; }
+.setlink { color: var(--set-accent); border-bottom: 1px dotted var(--set-accent); cursor: help; }
+.item-fixed { font-size: 12px; color: var(--muted); font-style: italic; margin: 6px 0; }
+.suffix-pills { font-size: 13px; line-height: 1.9; }
+.craft-row { font-size: 13px; margin: 3px 0; }
+.craft-cat { color: var(--muted); }
+.craft-unlock { font-size: 12px; color: var(--muted); margin-left: 8px; }
+.shop-list { display: flex; flex-direction: column; gap: 2px; }
+.shop-row, .start-row { font-size: 13px; }
+
 /* dialogue view */
 .dlg-stage { border-bottom: 1px solid var(--line); }
 .dlg-head { display: flex; align-items: center; gap: 10px; padding: 10px 4px; cursor: pointer; }

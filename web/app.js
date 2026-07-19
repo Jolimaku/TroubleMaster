@@ -1,6 +1,8 @@
 "use strict";
 (function () {
   const DATA = window.TS_DATA || { masteries: [], sets: [], counts: {} };
+  const ITEMS = window.TS_ITEMS || { items: [], ranks: {}, types: {}, shops: {},
+    craft_categories: {}, stat_meta: {}, suffix_pools: {}, suffixes: {} };
   const UI = window.TS_UI || {};
   const t = (key, fallback) => (UI[key] != null ? UI[key] : fallback);   // localized chrome string, with English fallback
   // localized string with {placeholder} substitution, e.g. tf("count.shown","{n} of {total}",{n,total})
@@ -95,7 +97,7 @@
   // quest id -> {npcName, chainIndex} so a prerequisite can be shown as "NPC #N"
   const QUEST_BY_ID = {}; (DATA.quests || []).forEach(q => { QUEST_BY_ID[q.id] = q; });
 
-  const state = { view: "masteries", group: "normal", indivCat: "Individual", q: "", type: "", category: "", starred: false, sortKey: "name", sortDir: 1,
+  const state = { view: "masteries", group: "normal", indivCat: "Individual", itemCat: "Weapon", rankMin: 4, rankMax: 8, lvMin: 0, lvMax: 60, q: "", type: "", category: "", starred: false, sortKey: "name", sortDir: 1,
     // per-column filter row (Masteries / Abilities tables): colFilters[key] = active value
     // (lowercased substring for text columns, exact value for dropdowns); colModes[key] = "text"|"select"
     colFilters: {}, colModes: {} };
@@ -126,8 +128,11 @@
     search: $("#search"), type: $("#type-filter"), count: $("#count"),
     typeLabel: $("#type-filter-label"),
     cat: $("#cat-filter"), catLabel: $("#cat-filter-label"),
+    rankMin: $("#rankmin-filter"), rankMax: $("#rankmax-filter"), rankLabel: $("#rank-filter-label"), itemsList: $("#items-list"),
+    itemSubtabs: $("#item-subtabs"), lvMin: $("#lvmin-filter"), lvMax: $("#lvmax-filter"),
+    lvLabel: $("#lv-filter-label"),
     body: $("#mastery-body"), grid: $("#set-grid"), footer: $("#footer"),
-    dialogue: $("#dialogue-list"), equipGrid: $("#equipset-grid"),
+    dialogue: $("#dialogue-list"),
     indivSubtabs: $("#indiv-subtabs"), abilityBody: $("#ability-body"),
     starFilter: $("#star-filter"), starCount: $("#star-count"),
     questsList: $("#quests-list"),
@@ -230,6 +235,10 @@
   }
   const abilityByName = {};
   (DATA.abilities || []).forEach(a => { abilityByName[a.name] = a; });
+  const abilityById = {};
+  (DATA.abilities || []).forEach(a => { abilityById[a.id] = a; });
+  const equipSetByName = {};
+  (DATA.equipmentSets || []).forEach(e => { equipSetByName[e.name] = e; });
   // buff effect lookup (name → text), keyed by the label a `buff` inline-ref carries — so a chip's
   // hover shows the effect, mirroring the in-game nested tooltip.
   const buffDesc = DATA.buffs || {};
@@ -734,6 +743,9 @@
     if (m.flavor) td.append(el("div.flavor", { text: "“" + m.flavor + "”" }));
     if (m.grantsAbility && abilityByName[m.grantsAbility])   // cross-link to the Abilities tab
       td.append(el("div.chiplist.ability-link", {}, t("detail.grantsAbility", "Grants ability:") + " ", abilityChip(m.grantsAbility)));
+    if (m.craftCost)   // drone module: the fixed materials to craft it (Technique <RequireItems>)
+      td.append(el("div.craft-cost", { text: t("detail.moduleCraft", "Crafting materials:") + " " +
+        m.craftCost.map(x => x.name + (x.count > 1 ? " ×" + x.count : "")).join(", ") }));
     if (m.categoryRaw === "Beasts") {                 // evolution-pick availability + demoted enemy carriers
       const wrap = el("div.srclist");
       const addLine = (txt, cls) => wrap.append(el("div", { class: cls, text: txt }));
@@ -886,25 +898,348 @@
     if (!list.length) els.grid.innerHTML = `<div class="empty">${t("empty.sets", "No sets match.")}</div>`;
   }
 
+  // the Equipment Sets subtab of the Items view — renders into the shared items-list container
   function renderEquipSets() {
     const all = DATA.equipmentSets || [];
-    const list = all
-      .filter(e => matches(e._blob) && (!state.type || e.type === state.type))
+    const list = all.filter(e => matches(e._blob))
       .sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1);
     els.count.textContent = tf("count.equipsets", "{n} of {total} equipment sets", { n: list.length, total: all.length });
-    const frag = document.createDocumentFragment();
-    for (const e of list) {
-      const card = el("div.card", {},
+    const grid = el("div.grid");
+    for (const e of list)
+      grid.appendChild(el("div.card", {},
         el("h3", { text: e.name }),
-        e.type && el("div.meta", { text: e.type }),
         el("div.equip-thresholds", {}, e.thresholds.map(th =>
           el("div.equip-th", {},
             el("span.equip-n", { text: tf("equip.pieces", "{n} pc", { n: th.n }) }),
-            el("span.equip-desc", { text: th.desc })))));
-      frag.appendChild(card);
+            el("span.equip-desc", { text: th.desc }))))));
+    els.itemsList.replaceChildren(grid);
+    if (!list.length) els.itemsList.innerHTML = `<div class="empty">${t("empty.equipsets", "No equipment sets match.")}</div>`;
+  }
+
+  // ---- items (equipment / craftables reference) ----
+  const ITEMS_BY_ID = {};
+  ITEMS.items.forEach(i => { ITEMS_BY_ID[i.id] = i; });
+  const GEAR_CATS = new Set(["Weapon", "Armor", "Accessory"]);
+  // weapon subtabs are split PC-equippable vs NPC-only (object.xml PC_* EnableEquipWeapon)
+  const pcWeaponSet = new Set(ITEMS.pc_weapon_types || []);
+  function itemMatchesCat(it) {
+    if (state.itemCat === "Weapon") return it.category === "Weapon" && pcWeaponSet.has(it.type);
+    if (state.itemCat === "WeaponNPC") return it.category === "Weapon" && !pcWeaponSet.has(it.type);
+    return it.category === state.itemCat;
+  }
+  // the level (require_lv) filter only applies to equipment subtabs
+  const EQUIP_SUBTABS = new Set(["Weapon", "WeaponNPC", "Armor", "Accessory"]);
+  const isEquipSubtab = () => EQUIP_SUBTABS.has(state.itemCat);
+  (function buildLvOptions() {
+    for (let v = 0; v <= 60; v += 5) {
+      els.lvMin.appendChild(new Option(v, v));
+      els.lvMax.appendChild(new Option(v, v));
     }
-    els.equipGrid.replaceChildren(frag);
-    if (!list.length) els.equipGrid.innerHTML = `<div class="empty">${t("empty.equipsets", "No equipment sets match.")}</div>`;
+    els.lvMin.value = state.lvMin; els.lvMax.value = state.lvMax;
+  })();
+  const rankName = r => (ITEMS.ranks[r] || {}).name || r;
+  const rankWeight = r => (ITEMS.ranks[r] || {}).weight || 0;
+  // rarity range: two selects (min–max) over the ranks that items actually use, ordered by weight
+  // (Poor…Unique) — ranks with no items (e.g. Quest) are left out
+  (function buildRankOptions() {
+    const present = new Set(ITEMS.items.map(it => it.rank));
+    const opts = Object.entries(ITEMS.ranks)
+      .filter(([id]) => present.has(id)).map(([, r]) => r)
+      .sort((a, b) => a.weight - b.weight);
+    const maxW = opts.length ? opts[opts.length - 1].weight : 8;
+    if (state.rankMax > maxW) state.rankMax = maxW;
+    opts.forEach(r => {
+      els.rankMin.appendChild(new Option(r.name, r.weight));
+      els.rankMax.appendChild(new Option(r.name, r.weight));
+    });
+    els.rankMin.value = state.rankMin; els.rankMax.value = state.rankMax;
+  })();
+  const itemTypeName = ty => (ITEMS.types[ty] || {}).name || ty;
+  const statLabel = s => (ITEMS.stat_meta[s] || {}).label || s;
+  const statUnit = s => ((ITEMS.stat_meta[s] || {}).format === "Percent" ? "%" : "");
+  const statVal = (s, v) => (v > 0 ? "+" : "") + v + statUnit(s);
+  function itemBlob(it) {
+    if (it._blob == null)
+      it._blob = [it.name, itemTypeName(it.type), rankName(it.rank), it.flavor || ""].join(" ").toLowerCase();
+    return it._blob;
+  }
+
+  // Type/Rarity/Level apply to item subtabs; the Equipment Sets subtab hides all three (search only)
+  function syncItemFilterVisibility() {
+    const isSets = state.itemCat === "Sets";
+    els.typeLabel.style.display = isSets ? "none" : "";
+    els.rankLabel.hidden = isSets;
+    els.lvLabel.hidden = isSets || !isEquipSubtab();
+  }
+  function populateItemFilters() {
+    // category is chosen via the in-view subtabs (they're distinct enough that "all" makes no sense)
+    if (!state.itemCat) state.itemCat = "Weapon";
+    els.itemSubtabs.querySelectorAll(".subtab").forEach(b =>
+      b.classList.toggle("active", b.dataset.cat === state.itemCat));
+    syncItemFilterVisibility();
+    if (state.itemCat !== "Sets") {
+      rebuildItemTypes();
+      els.rankMin.value = state.rankMin; els.rankMax.value = state.rankMax;
+    }
+    els.lvMin.value = state.lvMin; els.lvMax.value = state.lvMax;
+  }
+  // Type dropdown reflects the active category subtab (only the types actually in use)
+  function rebuildItemTypes() {
+    const src = ITEMS.items.filter(itemMatchesCat);
+    const types = [...new Set(src.map(i => i.type))].sort((a, b) => itemTypeName(a).localeCompare(itemTypeName(b)));
+    els.type.replaceChildren(new Option(t("filter.all", "All"), ""));
+    types.forEach(ty => els.type.appendChild(new Option(itemTypeName(ty), ty)));
+    els.type.value = ""; state.type = "";
+  }
+
+  function renderItems() {
+    if (state.itemCat === "Sets") { renderEquipSets(); return; }   // the Equipment Sets subtab
+    const lvOn = isEquipSubtab();
+    const list = ITEMS.items.filter(it => itemMatchesCat(it)
+      && matches(itemBlob(it))
+      && (!state.type || it.type === state.type)
+      && rankWeight(it.rank) >= state.rankMin && rankWeight(it.rank) <= state.rankMax
+      && (!lvOn || ((it.require_lv || 0) >= state.lvMin && (it.require_lv || 0) <= state.lvMax)));
+    const catTotal = ITEMS.items.filter(itemMatchesCat).length;
+    els.count.textContent = tf("count.items", "{n} of {total} items", { n: list.length, total: catTotal });
+    // group into a section per Type; within a type sort by level, then rarity (rarest first), then name
+    const byType = new Map();
+    for (const it of list) (byType.get(it.type) || byType.set(it.type, []).get(it.type)).push(it);
+    const types = [...byType.keys()].sort((a, b) => itemTypeName(a).localeCompare(itemTypeName(b)));
+    const frag = document.createDocumentFragment();
+    for (const ty of types) {
+      const group = byType.get(ty).sort((a, b) =>
+        (a.require_lv || 0) - (b.require_lv || 0)
+        || rankWeight(b.rank) - rankWeight(a.rank)
+        || a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      frag.appendChild(el("section.type-section", {},
+        el("h3.type-heading", {},
+          el("span.type-heading-name", { text: itemTypeName(ty) }),
+          el("span.type-heading-count", { text: group.length })),
+        el("div.grid.items-grid", {}, group.map(itemCard))));
+    }
+    els.itemsList.replaceChildren(frag);
+    if (!list.length) els.itemsList.innerHTML = `<div class="empty">${t("empty.items", "No items match.")}</div>`;
+  }
+
+  function itemCard(it) {
+    const card = el("div.card.item-card.rank-" + it.rank, { dataset: { id: it.id } });
+    const summary = el("div.item-summary", {},
+      el("div.item-head", {},
+        el("h3.item-name", { text: it.name }),
+        el("span.item-rank", { text: rankName(it.rank) })),
+      el("div.meta.item-meta", { text: [itemTypeName(it.type), it.require_lv && tf("item.reqlv", "Lv {n}", { n: it.require_lv })].filter(Boolean).join(" · ") }));
+    const keys = Object.keys(it.stats || {});
+    if (keys.length)
+      summary.append(el("div.item-stats", {}, keys.map(k =>
+        el("span.item-stat", {},
+          el("span.stat-lbl", { text: statLabel(k) }),
+          el("span.stat-val", { text: statVal(k, it.stats[k]) })))));
+    summary.addEventListener("click", () => toggleItemDetail(card, it));
+    card.append(summary);
+    return card;
+  }
+
+  function toggleItemDetail(card, it) {
+    const open = card.querySelector(".item-detail");
+    if (open) { open.remove(); card.classList.remove("open"); return; }
+    card.classList.add("open");
+    const d = el("div.item-detail");
+    if (it.flavor) d.append(el("div.flavor", { text: "“" + it.flavor + "”" }));
+    if (it.grants_ability) {
+      const g = it.grants_ability;   // {id, name} — chip+tip when it's in the Abilities tab, else a plain name pill
+      const pill = abilityById[g.id] ? abilityChip(abilityById[g.id].name) : el("span.chip", { text: g.name });
+      d.append(el("div.item-grant.chiplist", {}, t("item.grantsAbility", "Grants ability:") + " ", pill));
+    }
+    if (it.grants_mastery && it.grants_mastery.effect) {   // inlined device-mastery effect text
+      d.append(heading(t("item.effect", "Equipment effect")));
+      const box = el("div.item-effect");
+      parseMarkup(box, it.grants_mastery.effect);
+      d.append(box);
+    }
+    if (it.set) {
+      const label = t("item.partOfSet", "Part of set:") + " ";
+      const es = equipSetByName[it.set];   // hover card of the same content as the Equipment Sets tab
+      if (es) {
+        const pill = el("span.setlink", { text: it.set });
+        pill.addEventListener("mouseenter", () => showTip(pill, box => buildEquipSetTip(es, box)));
+        pill.addEventListener("mouseleave", () => hideTip(pill));
+        d.append(el("div.item-grant", {}, label, pill));
+      } else {
+        d.append(el("div.item-grant", { text: label + it.set }));
+      }
+    }
+    if (it.identifiable) appendSuffixes(d, it);
+    else if (GEAR_CATS.has(it.category))
+      d.append(el("div.item-fixed", { text: t("item.fixedStats", "Fixed stats — cannot be identified.") }));
+    appendItemSources(d, it);
+    card.append(d);
+  }
+
+  function statRange(ln) {
+    const u = statUnit(ln.stat);
+    return ln.min === ln.max ? "+" + ln.min + u : "+" + ln.min + "–" + ln.max + u;
+  }
+  // hover card for an item's equipment set — same content as the Equipment Sets tab cards
+  function buildEquipSetTip(es, box) {
+    add(box, el("div.tip-name", { text: es.name }));
+    (es.thresholds || []).forEach(th => add(box,
+      el("div.tip-meta", { text: tf("equip.pieces", "{n} pc", { n: th.n }) }),
+      el("div.tip-desc", { text: th.desc })));
+  }
+  // hover-only pill preview of a suffix's rolled stat ranges — same mechanic as the inline buff pills
+  function buildSuffixTip(sf, box) {
+    add(box, el("div.tip-name", { text: sf.name }),
+      el("div.tip-desc", {}, (sf.lines || []).map(ln =>
+        el("div", { text: statLabel(ln.stat) + " " + statRange(ln) }))));
+  }
+  function appendSuffixes(d, it) {
+    const pool = ITEMS.suffix_pools[it.type];
+    const ids = pool ? (pool.eligible_by_rank || {})[it.rank] || [] : [];
+    if (!ids.length) return;
+    d.append(heading(tf("item.suffixes", "Possible suffixes ({n})", { n: ids.length })));
+    const wrap = el("div.suffix-pills");
+    ids.forEach(sid => {
+      const sf = ITEMS.suffixes[sid];
+      if (!sf) return;
+      if (wrap.childNodes.length) wrap.append(", ");
+      const span = el("span.bufflink", { text: sf.name });
+      span.addEventListener("mouseenter", () => showTip(span, box => buildSuffixTip(sf, box)));
+      span.addEventListener("mouseleave", () => hideTip(span));
+      wrap.append(span);
+    });
+    d.append(wrap);
+  }
+
+  function appendItemSources(d, it) {
+    const has = k => it[k] && it[k].length;
+    if (has("drops")) {
+      d.append(heading(tf("item.drops", "Dropped by ({n})", { n: it.drops.length })));
+      d.append(renderDropList(it.drops));
+    }
+    if (has("stage_loot")) {
+      d.append(heading(t("item.stageLoot", "Found as loot in")));
+      const ms = el("div.missions");
+      it.stage_loot.forEach(m => {
+        const span = el("span.mission");
+        if (m.level != null) span.append(el("span", { class: "lvl-badge case-" + (m.case || "Ordinary"), text: m.level, title: caseTip(m.case) }));
+        span.append(m.name);
+        ms.append(span);
+      });
+      d.append(ms);
+    }
+    if (has("loot_box")) {
+      const lvls = [...new Set(it.loot_box.map(b => b.level))].sort((a, b) => a - b);
+      const tiers = [...new Set(it.loot_box.map(b => b.tier))];
+      d.append(heading(t("item.lootBox", "Loot box")));
+      d.append(el("div.flavor", { text: tf("item.lootBoxNote", "In loot chests found in Lv {lv} stages ({tier}).", { lv: lvls.join(", "), tier: tiers.join(" / ") }) }));
+    }
+    if (has("craft")) {
+      d.append(heading(t("item.craft", "Crafting")));
+      it.craft.forEach(cr => d.append(renderCraft(cr)));
+    }
+    if (has("sold_at")) {
+      d.append(heading(t("item.shops", "Sold at")));
+      const box = el("div.shop-list");
+      it.sold_at.forEach(s => {
+        const shop = ITEMS.shops[s.shop] || {};
+        let txt = (shop.name || s.shop) + " — " + tf("item.price", "{n} {cur}", { n: s.price.toLocaleString("en-US"), cur: shop.currency || "Vill" });
+        if (s.friendship) txt += " (" + tf("item.friendship", "{x} friendship", { x: s.friendship }) + ")";
+        box.append(el("div.shop-row", { text: txt }));
+      });
+      d.append(box);
+    }
+    if (has("starts_with")) {
+      d.append(heading(t("item.starting", "Starting equipment")));
+      d.append(el("div.start-row", { text: it.starts_with.join(", ") }));
+    }
+    if (it.quest_reward) {
+      d.append(heading(t("item.quest", "Quest reward")));
+      d.append(el("div.flavor", { text: t("item.questNote", "Rewarded by a quest — see the Quests tab.") }));
+    }
+    if (it.rescue_reward) {
+      d.append(heading(t("item.rescue", "Civilian rescue reward")));
+      d.append(el("div.flavor", { text: t("item.rescueNote", "Mailed to you for rescuing a civilian.") }));
+    }
+    if (it.given_by_event) {
+      d.append(heading(t("item.event", "Story / tutorial gift")));
+      d.append(el("div.flavor", { text: t("item.eventNote", "Given during a story or tutorial event.") }));
+    }
+    if (has("steal_from")) {
+      d.append(heading(t("item.steal", "Stealable (Thief)")));
+      d.append(el("div.start-row", { text: t("item.stealNote", "In a pocket — steal it with a Thief (Misty), from:") + " " + it.steal_from.join(", ") }));
+    }
+    if (has("npc_carriers")) {
+      d.append(heading(t("item.npcOnly", "NPC-only equipment")));
+      d.append(el("div.start-row", { text: t("item.npcNote", "Not player-obtainable — only worn by:") + " " + it.npc_carriers.join(", ") }));
+    }
+    if (!has("drops") && !has("craft") && !has("sold_at") && !has("starts_with") && !it.quest_reward && !it.rescue_reward && !it.given_by_event && !has("steal_from") && !has("npc_carriers"))
+      d.append(el("div.flavor", { text: t("item.noSource", "No known source.") }));
+  }
+  function renderCraft(cr) {
+    const parts = (cr.materials || []).map(m => {
+      const mi = ITEMS_BY_ID[m.id];
+      return (m.amount > 1 ? m.amount + "× " : "") + (mi ? mi.name : m.id);
+    });
+    const catName = cr.category ? (ITEMS.craft_categories[cr.category] || cr.category) : "";
+    const box = el("div.craft-row", {},
+      catName && el("span.craft-cat", { text: catName + ": " }),
+      el("span", { text: parts.join(" + ") }));
+    // how the recipe is obtained (familiarity tree root / predecessor, quest reward, or loot-only)
+    if (cr.root)
+      box.append(el("div.craft-unlock", { text: t("item.craftStarter", "Starter recipe") }));
+    else if (cr.unlocked_by)
+      box.append(el("div.craft-unlock", { text: tf("item.craftUnlock", "Unlocked by mastering {x}", { x: cr.unlocked_by.name }) }));
+    else if (cr.unlocked_by_quest)
+      box.append(el("div.craft-unlock", { text: t("item.craftQuest", "Recipe is a quest reward (see Quests tab)") }));
+    else if (cr.no_unlock)
+      box.append(el("div.craft-unlock", { text: t("item.craftNoUnlock", "No crafting unlock — obtain the item another way") }));
+    if (cr.raid_gated)
+      box.append(el("div.craft-unlock", { text: t("item.craftRaid", "Craftable only after raiding Pascal’s Hideout") }));
+    return box;
+  }
+  // enemy drop list — same look as the mastery "learnable from enemies" block (first carrier
+  // shown, the rest folded), reusing its .enemy-src / .missions / .lvl-badge styles.
+  function renderDropList(drops) {
+    const wrap = el("div.srclist.enemy-src");
+    const renderEnemy = e => {
+      const lv = e.lv ? (e.lv[0] === e.lv[1] ? ` (Lv ${e.lv[0]})` : ` (Lv ${e.lv[0]}–${e.lv[1]})`) : "";
+      const div = el("div", {}, el("span.enemy-name", { text: e.name + lv }));
+      if (e.missions && e.missions.length) {
+        const ms = el("div.missions");
+        e.missions.forEach(mm => {
+          if (mm.training) {
+            let txt = t("detail.jointTraining", "⚔ Joint Drill");
+            if (mm.teams && mm.teams.length) txt += " — " + mm.teams.join(", ");
+            ms.append(el("span.mission.training", { text: txt }));
+            return;
+          }
+          const item = el("span.mission", {},
+            el("span", { class: "lvl-badge case-" + mm.case, text: mm.level || "?", title: caseTip(mm.case) }));
+          item.append(mm.name + (mm.diff ? ` [${mm.diff}]` : ""));
+          ms.append(item);
+        });
+        div.append(ms);
+      }
+      return div;
+    };
+    const minLv = e => {
+      const ls = (e.missions || []).filter(mm => !mm.training && mm.level != null).map(mm => mm.level);
+      return ls.length ? Math.min(...ls) : Infinity;
+    };
+    const ordered = drops.slice().sort((a, b) => minLv(a) - minLv(b) || a.name.localeCompare(b.name));
+    wrap.append(renderEnemy(ordered[0]));
+    if (ordered.length > 1) {
+      const rest = ordered.slice(1);
+      const fold = el("div.enemy-fold");
+      const tg = el("span.enemy-toggle", { text: tf("detail.moreEnemies", "+{n} more", { n: rest.length }) });
+      tg.addEventListener("click", e => { e.stopPropagation(); fold.classList.toggle("open"); });
+      const body = el("div.enemy-more");
+      rest.forEach(e => body.append(renderEnemy(e)));
+      fold.append(tg, body);
+      wrap.append(fold);
+    }
+    return wrap;
   }
 
   // ---- abilities table ----
@@ -1077,7 +1412,8 @@
   // A serialisable snapshot of everything the views render from (the builder keeps its own state in
   // bldStore/localStorage, so view:"builder" just restores the tab).
   function captureState() {
-    return { view: state.view, group: state.group, indivCat: state.indivCat,
+    return { view: state.view, group: state.group, indivCat: state.indivCat, itemCat: state.itemCat,
+      rankMin: state.rankMin, rankMax: state.rankMax, lvMin: state.lvMin, lvMax: state.lvMax,
       q: state.q, type: state.type, colFilters: { ...state.colFilters },
       sortKey: state.sortKey, sortDir: state.sortDir, starred: state.starred };
   }
@@ -1104,6 +1440,9 @@
     if (!s) return;
     els.search.value = s.q || ""; state.q = s.q || ""; syncSearchClear();
     state.indivCat = s.indivCat || "Individual";
+    state.itemCat = s.itemCat || "Weapon";
+    state.rankMin = s.rankMin != null ? s.rankMin : 4; state.rankMax = s.rankMax != null ? s.rankMax : 8;
+    state.lvMin = s.lvMin != null ? s.lvMin : 0; state.lvMax = s.lvMax != null ? s.lvMax : 60;
     state.sortKey = s.sortKey || "name"; state.sortDir = s.sortDir || 1;
     state.starred = !!s.starred;
     const tab = tabFor(s.view, s.group);
@@ -1123,21 +1462,23 @@
     // row; the shared top-bar Type/Category dropdowns are only for the card/list views (no columns).
     els.catLabel.style.display = "none";   // Category only ever applied to masteries → now a column filter
     els.cat.value = ""; state.category = "";
+    els.rankLabel.hidden = true;           // rarity threshold + level range are items-only
+    els.lvLabel.hidden = true;
     if (state.view === "masteries" || state.view === "abilities") {
       els.typeLabel.style.display = "none";
       els.type.value = ""; state.type = "";
       setupColFilters();
       return;
     }
+    if (state.view === "items") { populateItemFilters(); return; }
     els.typeLabel.style.display = "";
     let values;
     if (state.view === "dialogue") {
       values = [...new Set((DATA.dialogues || []).map(s => s.case).filter(Boolean))].sort();
     } else if (state.view === "quests") {
       values = [...new Set((DATA.quests || []).map(q => q.typeLabel).filter(Boolean))].sort();
-    } else {
-      const src = state.view === "sets" ? DATA.sets : (DATA.equipmentSets || []);
-      values = [...new Set(src.map(x => x.type).filter(Boolean))].sort();
+    } else {   // Mastery Sets — the only remaining card view with a Type dropdown
+      values = [...new Set(DATA.sets.map(x => x.type).filter(Boolean))].sort();
     }
     els.type.replaceChildren(new Option(t("filter.all", "All"), ""));
     // dialogue values are raw case-type keys (Scenario/Quest/…) — show a localized label but keep
@@ -1176,10 +1517,10 @@
     updateStarFilterUI();
     if (state.view === "masteries") renderMasteries();
     else if (state.view === "sets") renderSets();
-    else if (state.view === "equipsets") renderEquipSets();
     else if (state.view === "abilities") renderAbilities();
     else if (state.view === "builder") renderBuilder();
     else if (state.view === "quests") renderQuests();
+    else if (state.view === "items") renderItems();
     else renderDialogue();
   }
 
@@ -2904,6 +3245,14 @@
     tab.addEventListener("click", () => { selectTab(tab); render(); }));
   els.indivSubtabs.querySelectorAll(".subtab").forEach(b =>
     b.addEventListener("click", () => { state.indivCat = b.dataset.cat; populateTypes(); render(); }));
+  els.itemSubtabs.querySelectorAll(".subtab").forEach(b =>
+    b.addEventListener("click", () => {
+      state.itemCat = b.dataset.cat;
+      els.itemSubtabs.querySelectorAll(".subtab").forEach(x => x.classList.toggle("active", x === b));
+      syncItemFilterVisibility();
+      if (state.itemCat !== "Sets") rebuildItemTypes();
+      render();
+    }));
   // lazily add a title tooltip to an inline description cell only when it's actually ellipsised
   // (measured at hover time → cheap, and stays correct across window resizes; no CSS way to do this)
   const ellipsisTitle = e => {
@@ -2935,6 +3284,26 @@
     deb = setTimeout(() => { state.q = els.search.value.trim().toLowerCase(); render(); }, 120);
   });
   els.type.addEventListener("change", () => { state.type = els.type.value; render(); });
+  els.rankMin.addEventListener("change", () => {
+    state.rankMin = +els.rankMin.value;
+    if (state.rankMin > state.rankMax) { state.rankMax = state.rankMin; els.rankMax.value = state.rankMax; }  // push max up
+    render();
+  });
+  els.rankMax.addEventListener("change", () => {
+    state.rankMax = +els.rankMax.value;
+    if (state.rankMax < state.rankMin) { state.rankMin = state.rankMax; els.rankMin.value = state.rankMin; }  // pull min down
+    render();
+  });
+  els.lvMin.addEventListener("change", () => {
+    state.lvMin = +els.lvMin.value;
+    if (state.lvMin > state.lvMax) { state.lvMax = state.lvMin; els.lvMax.value = state.lvMax; }  // push max up
+    render();
+  });
+  els.lvMax.addEventListener("change", () => {
+    state.lvMax = +els.lvMax.value;
+    if (state.lvMax < state.lvMin) { state.lvMin = state.lvMax; els.lvMin.value = state.lvMin; }  // pull min down
+    render();
+  });
   els.cat.addEventListener("change", () => { state.category = els.cat.value; render(); });
   els.starFilter.addEventListener("click", () => { state.starred = !state.starred; render(); });
 

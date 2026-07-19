@@ -152,6 +152,13 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   RequireLv]`. Building a drone and levelling it in its class unlocks the listed modules
   (the `Module_*` masteries); names resolve via the drone's `Monster`/`ObjectInfo`. 59
   modules come from this. Shown on the Modules tab as "<Drone> — Lv N".
+- **Module craft cost**: once unlocked, a board module is *crafted* from a fixed material list. Each is
+  a `Type="Module"` **Technique** (`Technique.xml`) whose class name == the module mastery name, with
+  `<RequireItems> → property[Item, Count]` (the in-game module-crafting screen — e.g.
+  `Module_AdditionalBooster` = MetalPart_Uncomon / Conductor_Semi / Cable_Insulated / Pocket_Oil_Uncommon).
+  `extract_masteries.py` attaches these (resolved material names) as `craftCost` on the 112 module
+  masteries → Modules-tab "Crafting materials:" line. (Board `Cost` is the separate *Output* cost;
+  character masteries have no material cost — their 842 `Type="Mastery"` techniques carry no `RequireItems`.)
 - **Achievement unlock** (feat-based): `xml/GuideTrigger.xml` — a `<class>` with a `Mastery`
   attribute grants that mastery when its `Checker` condition is met (Director
   `GuideTriggerDirector_AchievementMastery*` / Register-based). **31 masteries** (BeastHunter =
@@ -776,6 +783,145 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
   declares `Mastery=MagicResonance` with no `$Mastery$` in its text). The game doesn't render these
   either (its tooltip builds from the same data), so they're simply not surfaced — an earlier
   "Related:" line that listed them was removed after confirming all ~8 cases are unused data quirks.
+
+## Items, gear, and the identify system
+
+`Item.xml` holds **1,674 items** in idspace `Item`, plus the taxonomy enums it references as sibling
+idspaces in the same file: `ItemRank` (rarity), `ItemCategory` (8), `ItemType` (81),
+`ItemEquipmentPosition` (14). Names are Korean inline (`Base_Title=`); the localized value is the
+dict key **`Item/<id>/Base_Title`** (note: `Base_Title`, *not* `Title` — same rule as amulets/potions
+noted under "Data model notes"). Each item class carries `Rank`, `RequireLv`, `Category`, `Type`,
+`MainStatus`, a flavor blurb in `Desc_Suffix`, optional `Ability`/`Mastery` grants, and ~80 flat
+`Base_*` stat fields (AttackPower, Armor, every elemental/physical resist + damage line).
+`extract_items.py` **drops the whole `Etc` category** (113 items) — non-gear with nothing worth
+surfacing: the 110 cosmetic costumes (`Type="Costume_<char>"`, appearance only), plus coins and
+documents. That leaves 1,560 emitted items.
+
+- **Rarity is baked into the item, not rolled.** A gear line appears as **separate item entries per
+  tier**, each with its own fixed base stats — e.g. `Sword_CarbonBlade` (Common) →
+  `Sword_CarbonBlade_Black` (Common) → `..._Rare` → `..._Epic`. One item = one `Rank`. The random
+  rolls come from the **identify suffix** (below), never from the base item.
+- **Categories** (`ItemCategory`): Weapon, Armor, Accessory, Consume, Material, Tool, Machine, Etc.
+  Only **Weapon/Armor/Accessory** are equippable gear; the rest are crafting inputs, potions, drone
+  parts, junk. Rank distribution across all items: Uncommon 356, Rare 355, Epic 319, Legend 193,
+  Set 162, Unique 130, Common 116, Poor 43 (+ Quest).
+- **Sourcing** (parallels mastery sourcing): an item's real "where do I get it" channels are
+  **enemy drops** — `Monster.xml <Rewards> → property[Item, Min, Max]` (the drop table; the sibling
+  `<Equipments>` block is what the enemy has equipped and is **not** stealable/lootable, so it is *not*
+  a source) — plus **crafting** (`ItemCraft.xml` idspace `Recipe`, 840 entries, `Recipe.name` == the
+  produced item id: `RequireMaterials → property[Item, Amount]`; see the recipe-tree note below) and
+  **shops** (see below), plus
+  **starting equipment** — `Pc.xml` idspace `Pc`, each character class's `<BundleEquipment> →
+  property[name=slot, Item]` (name via `ObjectInfo/<Info>/Title`). A recruited character brings a
+  fixed loadout, which is the **only reliable source for the roster uniques** (e.g. Giselle starts
+  with the Wallenstein Sniper Rifle; the roster-buyback listing sits in a separate `Shop.xml` block
+  *outside* `<ItemList>`, so it's correctly not counted as a shop). 55 items across the 12 chars.
+  **Quest** rewards are already surfaced in the Quests tab; item sets have their own tab — cross-link,
+  don't rebuild. (Item sets live in `ItemSet.xml` and are distinct from mastery sets, though a set's
+  `Mastery1..5` fields grant the set masteries the builder already models.)
+- **Shops** (`Shop.xml`): just **11 category storefronts** (`WeaponShop`, `WeaponShop2`, `ArmorShop`,
+  `AccessoryShop`, `PsistoneShop`, `AlchemyShop`, `MaterialShop`, `CurioShop`, `JunkShop`,
+  `ValkyrieShop`, `LostShop`) — *not* one per item type. Each has an `<ItemList>` that is a **stock
+  pool**, not a static shelf: `RefreshList` shops re-roll a subset of the pool each refresh, so
+  "sold at X" is the useful fact, not a guaranteed listing. Each entry carries `Item`, `Price`,
+  `Rate` (refresh spawn-weight), `Slot`, `Friendship` (gate), `Checker` (availability), and
+  `RandomOption="true"` — **gear is sold unidentified**, so a shop weapon is a base item you then
+  identify. An item maps to **≤ 2 shops** (507 items in one, 35 in two — the `WeaponShop`/`WeaponShop2`
+  pair); one item may appear as several entries (different `Slot`/`Rate`) but `Price` is constant per
+  item, so collapse to `{shop, price}`. Currency is per-shop (`Vill` for all but `ValkyrieShop` =
+  `ValkyrieCoin`), not per-item.
+- **The recipe *familiarity tree*** (`ItemCraft.xml` + `lobby_enter.lua` `CheckRecipeUnlock`): every
+  recipe has its own `Exp`; **crafting it raises `Exp`, and at `Exp >= MaxExp` (`Get_RecipeMaxExp`,
+  scaled off the item's own `RequireLv/5 + Rank.Weight`) the recipe is "mastered" and opens the
+  recipes it lists in `UnLockRecipe`** (if their `AutoUnLock`). Roots are `Opened="true"` (craftable
+  from the start). It's a clean **single-parent forest**: 142 roots → 654 tree-unlocked (exactly one
+  predecessor each) → **44 orphans** (no root, no predecessor). ⚠️ **The recipe's `RequireLv` (1–3) is
+  NOT a player gate** — no character/profession-level check exists in normal play (the only
+  `craftSkillLevel >= RequireLv` use is a debug `Command_refillcraftitem`); it's just an internal tier
+  for exp *spillover* (crafting a higher-tier recipe also trains lower-tier ones in the same
+  `Category`, `shared_craft.lua` `GetCraftAddExpList`). So `extract_items.py` **drops `RequireLv`** and
+  instead records each craft source's unlock: `root:true`, `unlocked_by:{id,name}` (the predecessor
+  you master), `unlocked_by_quest:true`, or `no_unlock:true`. (`Category` is the profession/craft-tab,
+  a mix of `Profession` and `ItemType` names — resolve via whichever dict has a `Title`.)
+- **Orphan recipes** (the 44) split cleanly: **18 are direct quest rewards** (`Quest.xml` `Reward
+  Type="Recipe" Value=<id>` — the profession set pieces) and **26 have *no* craft-unlock path at all**
+  — `AutoUnLock="true"` but nothing lists them in any `UnLockRecipe`, so they can never open. Those 26
+  are **loot-only items whose recipe is effectively dead**: the 6 elemental Seal amulets (`Amulet_Fire`
+  …, which drop from enemies), 18 high-tier drone-Legend "Pascal's / Special / Reinforced / Ultra"
+  devices (raid loot), and 2 utility pens (`Pen_Light`/`Pen_Camera`). The 27 `Shop.xml` `GoodsType="Recipe"` listings and the 40-entry
+  `SpecialUnlockRecipe` "PascalRecipe" are **all tree/opened recipes, not orphans**.
+- **The Pascal's Hideout raid gate**: `AutoUnLock="false"` recipes (exactly **40**, == the `PascalRecipe`
+  list — DemonSlayer / MunggoEnhanced / Brush gear) stay locked even once their tree predecessor is
+  mastered, *until* you win the **`Raid_Pascal`** mission (`mission.xml`; `LocationTitle` = "Pascal's
+  Hideout", Lv60, `FixedMember="Albus"`) with the drawings found — `missionResult_Custom.lua`
+  `MissionResult_Custom_Raid_Pascal` flips each one's `AutoUnLock` to true. `extract_items.py` flags
+  these `raid_gated:true`.
+- **The full set of item-source channels** (found by hunting sourceless items — a comprehensive id
+  grep across every lua/xml/stage was needed, several were missed at first):
+  - **quest rewards** — `Quest.xml` `Reward Type="Item"` → `quest_reward:true` (`Type="Recipe"` feeds
+    the craft-unlock instead); the Flash/Camera pens come this way.
+  - **civilian rescue rewards** — `CivilRescueReward.xml` (rescuing a civilian mails you Vill + junk
+    toy/doll boxes + fake-gold spoons) → `rescue_reward:true`.
+  - **dialogue gifts** — `Dialog/*.xml` + `Dialog_*.xml`, `<property Command="GiveItem"|"RefillItem"
+    ItemName=…>` (`RefillItem` is the one-time variant for uniques — Albus's 'Black Pearl' sneakers)
+    → `given_by_event:true`. This is where the **base drone devices** come from (Kylie's drone-workshop
+    tutorial in `Dialog_Office.xml` — Common+Uncommon weapons/PowerDevice/three Composite armors/Hover/
+    Sensor). ⚠️ Those aren't "built into" the drone — you're given them, and the set feels unlimited
+    because unequipping a drone device **recovers it as parts** (line ~2255); no per-item marker.
+  - **stage loot** — items placed as `<ItemCollection><Item ItemType=…>` in a `.stage` file →
+    `stage_loot`, resolved to the **mission(s)** that use that stage (`mission.xml` `Stage="…"`) with
+    their titles/levels (Troubleshooter Jacket = Fallen Leaves Park Lv6, …).
+  - **loot boxes** — `ItemBox.xml` chests (variant `Box_Lv<N>_<Easy|Normal|Hard|Rare>`, picked at
+    runtime by stage level+difficulty) → `loot_box:[{level,tier}]`.
+  - **pocket steal** — the Steal mastery (Misty/Thief) takes a **non-`Gear`** item from an *enemy
+    human's* steal slots (`Inventory1`/`Inventory2` = the pockets + `AlchemyBag`/`GrenadeBag`/
+    `NinjaToolkit`; *"cannot steal Gear"*; gate on the carrier object's `Race == "Human"` — a drone's
+    Inventory1/2 hold Sensor/Fuel) → `steal_from:[names]`; resolves to just the Administrator Card keys.
+  - **NPC-only** — an item a hostile *wears* in any other slot (Weapon/Body/Hand/Leg/Module, or an
+    unstealable `Gear` pocket item) → `npc_carriers:[names]`. Not obtainable, but surfaced as a note.
+
+  The last five (dialogue/stage-loot/box/steal/NPC) are only recorded when the item has **no** other
+  player source.
+- **Sourceless items are dropped** (1560 → ~1464 emitted). `extract_items.py` drops any item that
+  **no channel can grant *and* no NPC even carries** — verified by the full grep to be cut/unused data
+  (many `_Rare`/`_Epic` "Magenta"/"Indigo" tiers whose siblings are sourced), combat-logic-only type
+  stubs (referenced only in `shared_battle*.lua`), and civilian-worn flavor (Bonaparte→
+  `Civil_OldmanGentle`, `_Old`→`Civil_OldmanWhite`, Examinee→`Civil_OchreFat`). Also always dropped:
+  `Ghost_*` items (the engine's **fallback weapon** when a unit is unarmed — `GhostWeapon.xml`
+  `DefaultValue`, not a real item). Obtainability of an **enemy drop** uses the *resolved* encounter
+  (`collapse_enemy_encounters`) — a drop from a phantom carrier (enemy that never appears in a
+  fightable mission) doesn't count, matching what the web shows.
+
+**The identify system** (`ItemIdentify.xml`, logic in `script/shared/shared_identify.lua`):
+
+- **What "identify" does:** an unidentified gear drop gets **exactly one suffix** rolled onto it,
+  chosen from a pool by weighted `Prob`; each stat line in that suffix then rolls a value in its
+  `[Min, Max]` (luck biases the roll upward, with a re-roll if the average roll quality < ~40%).
+- **The suffix pool is keyed by item `Type`, not by item** (`CP_GetItemIdentifyType` just returns
+  `item.Type.name`; `item.Custom_IdentifyType` is empty on all 1,674 items — unused). Pools live in
+  idspace **`ItemIdentifyType`** (29 classes, e.g. `LongSword` → 27 options, `Coat` → 54, `Pistol` →
+  19), each listing `<Options> → property[name]`. The suffix definitions live in idspace
+  **`ItemIdentify`** (208 classes): `Title2` (the suffix name, e.g. "Flame Guardian"), `Prob` (pick
+  weight), and `IdentifyOptions → property[Type, Min, Max]` (the stat lines). So **not every suffix
+  fits every item — the pool is the Type**, shared by all items of that type.
+- **Identify gate** (`IsEnableIdentifyItem`) — statically, an item is identifiable iff **all**:
+  1. `Category.IsIdentify` — true only for **Weapon / Armor / Accessory**.
+  2. `Rank.Identifiable` — true for **Common, Uncommon, Rare, Epic, Legend**; **false for Quest,
+     Poor, Set, Unique** (Poor is also excluded by rule `Rank.Weight == 1`).
+  3. Its `Type` has a pool in `ItemIdentifyType` (all weapon/armor/accessory types do).
+  (Runtime-only checks also apply: item not already optioned, enough Vill.)
+- **Set & Unique gear is NOT identifiable → it ships with fixed, pre-authored stats and never rolls a
+  suffix.** This is *the* reason the rarest gear "can't be identified"; Poor/Quest are excluded at the
+  bottom as junk/non-gear.
+- **Rank filters *which* suffixes are eligible, by the suffix's stat-line count.** A rank only rolls
+  suffixes whose number of stat lines falls in `[Rank.OptionMinCount, Rank.OptionMaxCount]`:
+  Common = 2, Uncommon = 2–3, Rare = 3–4, Epic = 4–5, Legend = 5. (The 208 suffixes are 21× 2-line,
+  53× 3-line, 52× 4-line, 82× 5-line.) So an identifiable item's true possible-roll set is a function
+  of **(Type × Rank)** — e.g. a *Rare LongSword* rolls any LongSword suffix with 3–4 lines. Suffixes
+  flagged `Developing` are skipped (same convention as "Content exclusion" below).
+- **`ForceIdentifier` is a red herring for identify** — despite the name it is *not* an identify flag
+  (its schema default is the number `0`, and its non-zero values are a per-`Type` sequence, not a pool
+  index). It is only ever read in `client/abilitydirecter.lua` as a per-weapon combat-visual seed.
 
 ## The in-game Help corpus (`xml/Help.xml`)
 

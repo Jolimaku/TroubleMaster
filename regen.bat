@@ -30,6 +30,8 @@ for %%L in (%LANGS%) do (
   if "%%L"=="eng" ( set "OUT=output" ) else ( set "OUT=output-%%L" )
   echo ^>^> extract_masteries.py --lang %%L --out !OUT!
   "%PYTHON%" extract_masteries.py --game "%GAME%" --data "%DATA%" --lang %%L --out "!OUT!" || exit /b 1
+  echo ^>^> extract_items.py --lang %%L --out !OUT!
+  "%PYTHON%" extract_items.py --game "%GAME%" --data "%DATA%" --lang %%L --out "!OUT!" || exit /b 1
 )
 
 echo ^>^> gen_pages.py ^(stamp each ^<lang^>\index.html from web\index.html^)
