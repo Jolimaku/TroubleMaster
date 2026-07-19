@@ -313,7 +313,7 @@ tr.detail td { padding: 4px 16px 16px; }
   font-variant-numeric: tabular-nums; }
 .items-grid { align-items: stretch; }          /* cards in a row share the tallest one's height */
 .item-card { --rank: var(--muted); border-left: 3px solid var(--rank); padding: 12px 14px; position: relative; }
-.item-card.open { z-index: 5; }                 /* lift the open card so its detail overlays neighbours */
+.item-card.open { z-index: 1; }                 /* lift the open card so its detail overlays neighbours (but stays under the sticky header/controls, z-index 4-5) */
 .item-card.rank-Poor     { --rank: #8b97a8; }
 .item-card.rank-Common   { --rank: #cfd6e0; }
 .item-card.rank-Uncommon { --rank: #5cc98b; }
