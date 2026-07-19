@@ -1489,6 +1489,16 @@
     state.type = "";
   }
   const TAB_KEY = "ts:activeTab";   // NOTE: i18n.js restores this tab's visual state pre-paint — keep the key + the .tab/.view/.active/.controls contract in sync
+  // persist the active tab + the Individual/Items sub-tab picks so a reload restores them (i18n.js
+  // reads only view/group pre-paint; the sub-tab fields are extra and ignored there)
+  function persistTab() {
+    // read the group from the active tab's own dataset, not state.group: tabs without a data-group
+    // (Items, Sets, …) leave state.group at its prior masteries value, which savedTab() can't match
+    const active = document.querySelector(".tab.active");
+    const view = active ? active.dataset.view : state.view;
+    const group = active ? (active.dataset.group || "") : "";
+    try { localStorage.setItem(TAB_KEY, JSON.stringify({ view, group, indivCat: state.indivCat, itemCat: state.itemCat })); } catch (e) { /* storage blocked */ }
+  }
   function selectTab(tab) {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
@@ -1498,13 +1508,16 @@
       v.classList.toggle("active", v.id === "view-" + state.view));
     // the builder has its own toolbar; hide the shared search/type/category bar
     document.querySelector(".controls").style.display = state.view === "builder" ? "none" : "";
-    try { localStorage.setItem(TAB_KEY, JSON.stringify({ view: tab.dataset.view, group: tab.dataset.group || "" })); } catch (e) { /* storage blocked */ }
+    persistTab();
     populateTypes();
   }
-  // the tab button matching a saved {view, group}, or null
+  // the saved {view, group, indivCat?, itemCat?}, or null
+  function savedTabState() {
+    try { return JSON.parse(localStorage.getItem(TAB_KEY) || "null"); } catch (e) { return null; }
+  }
+  // the tab button matching the saved {view, group}, or null
   function savedTab() {
-    let t;
-    try { t = JSON.parse(localStorage.getItem(TAB_KEY) || "null"); } catch (e) { t = null; }
+    const t = savedTabState();
     if (!t) return null;
     return [...document.querySelectorAll(".tab")]
       .find(x => x.dataset.view === t.view && (x.dataset.group || "") === (t.group || "")) || null;
@@ -3244,10 +3257,11 @@
   document.querySelectorAll(".tab").forEach(tab =>
     tab.addEventListener("click", () => { selectTab(tab); render(); }));
   els.indivSubtabs.querySelectorAll(".subtab").forEach(b =>
-    b.addEventListener("click", () => { state.indivCat = b.dataset.cat; populateTypes(); render(); }));
+    b.addEventListener("click", () => { state.indivCat = b.dataset.cat; persistTab(); populateTypes(); render(); }));
   els.itemSubtabs.querySelectorAll(".subtab").forEach(b =>
     b.addEventListener("click", () => {
       state.itemCat = b.dataset.cat;
+      persistTab();
       els.itemSubtabs.querySelectorAll(".subtab").forEach(x => x.classList.toggle("active", x === b));
       syncItemFilterVisibility();
       if (state.itemCat !== "Sets") rebuildItemTypes();
@@ -3321,7 +3335,12 @@
 
   // init
   bldLoad();              // restore the autosaved builds before first render
-  const tab = savedTab(); // restore the last active tab (selectTab runs populateTypes)
+  const savedTb = savedTabState();  // restore the last active tab + sub-tab picks (selectTab runs populateTypes)
+  if (savedTb) {
+    if (savedTb.indivCat) state.indivCat = savedTb.indivCat;
+    if (savedTb.itemCat) state.itemCat = savedTb.itemCat;
+  }
+  const tab = savedTab();
   if (tab) selectTab(tab); else populateTypes();
   render();
   bldLoadFromHash();                                   // a #build=… link overrides the tab/build
