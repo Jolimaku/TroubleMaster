@@ -26,6 +26,7 @@ window.TS_UI = {
   "itemcat.material": "Material",
   "itemcat.tool": "Tool",
   "itemcat.machine": "Machine",
+  "itemcat.machineNpc": "NPC Machine",
   "itemcat.etc": "Etc",
   "count.items": "{n} of {total} items",
   "empty.items": "No items match.",

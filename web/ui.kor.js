@@ -27,6 +27,7 @@ window.TS_UI = {
   "itemcat.material": "소재",
   "itemcat.tool": "도구",
   "itemcat.machine": "기계",
+  "itemcat.machineNpc": "NPC 기계",
   "itemcat.etc": "기타",
   "count.items": "아이템 {total}개 중 {n}개",
   "empty.items": "일치하는 아이템이 없습니다.",

@@ -925,6 +925,10 @@
   function itemMatchesCat(it) {
     if (state.itemCat === "Weapon") return it.category === "Weapon" && pcWeaponSet.has(it.type);
     if (state.itemCat === "WeaponNPC") return it.category === "Weapon" && !pcWeaponSet.has(it.type);
+    // Machine splits per-item on obtainability: npc_carriers is only set when source-finding found
+    // no player channel (see extract_items.py), so it's the NPC-only marker
+    if (state.itemCat === "Machine") return it.category === "Machine" && !it.npc_carriers;
+    if (state.itemCat === "MachineNPC") return it.category === "Machine" && !!it.npc_carriers;
     return it.category === state.itemCat;
   }
   // the level (require_lv) filter only applies to equipment subtabs
