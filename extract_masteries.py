@@ -1837,17 +1837,36 @@ def emit_codemap(xml, path):
     print(f"wrote {path} ({len(codemap)} code entries)")
 
 
-def source_date(xml):
-    """Date the game data was extracted, for data.js's `generated` stamp. Anchored on a core
+def source_date(xml, anchor="Mastery.xml"):
+    """Date the game data was extracted, for the `generated` stamp. Anchored on a core
     unpacked source file's modtime (set when extract_files.py unpacks the game) rather than the
     build date, so rebuilding an unchanged snapshot produces no spurious diff — it only advances
-    when the game is re-unpacked. Mastery.xml is a central input and won't be hand-edited; max-of-all
-    modtimes is deliberately avoided (a single touched file, e.g. CheatCommand.xml, would poison it).
-    Falls back to today if the anchor is missing."""
+    when the game is re-unpacked. The anchor is a central input that won't be hand-edited
+    (data.js: Mastery.xml; items.js: Item.xml); max-of-all modtimes is deliberately avoided (a
+    single touched file, e.g. CheatCommand.xml, would poison it). Falls back to today if missing."""
     try:
-        return datetime.date.fromtimestamp(os.path.getmtime(os.path.join(xml, "Mastery.xml"))).isoformat()
+        return datetime.date.fromtimestamp(os.path.getmtime(os.path.join(xml, anchor))).isoformat()
     except OSError:
         return datetime.date.today().isoformat()
+
+
+def dump_web_json(f, payload):
+    """Serialize `payload` (the TS_DATA / TS_ITEMS object) with each top-level container's elements
+    on their own line, so `git diff` shows per-record changes (one mastery/set/item/buff per line)
+    instead of a single multi-MB line. Values stay compact — nested structures sit on the record's
+    own line, so the only added bytes are ~1 newline per top-level record (negligible vs the file).
+    Loaders are unaffected: the browser parses the embedded JSON regardless of internal newlines, and
+    the `jq -Rs … fromjson` data.js helper reads the whole file as one string."""
+    c = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":"))
+    parts = []
+    for k, v in payload.items():
+        if isinstance(v, list) and v:
+            parts.append(c(k) + ":[\n" + ",\n".join(c(e) for e in v) + "\n]")
+        elif isinstance(v, dict) and v:
+            parts.append(c(k) + ":{\n" + ",\n".join(c(ik) + ":" + c(iv) for ik, iv in v.items()) + "\n}")
+        else:                                       # scalars and empty containers stay inline
+            parts.append(c(k) + ":" + c(v))
+    f.write("{\n" + ",\n".join(parts) + "\n}")
 
 
 def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None,
@@ -2029,7 +2048,7 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
 
     web_sets = []
     for s in sets:
-        ws = {"id": s["id"], "name": s["name"], "type": s["type_name"],
+        ws = {"id": s["id"], "name": s["name"], "type": s["type_name"], "typeRaw": s["type"],
               "dlc": "" if s["dlc"] == "None" else s["dlc"],
               "components": s["components"], "bonus": s["bonus_desc"]}
         web_sets.append(ws)
@@ -2047,9 +2066,9 @@ def write_web_data(path, masteries, sets, enemy_missions=None, mission_info=None
                "buffGroups": buff_groups or {}, "quests": quests or [],
                "counts": {"masteries": len(web_masteries), "sets": len(web_sets)}}
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("window.TS_DATA = ")
-        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+        dump_web_json(f, payload)
         f.write(";\n")
 
     # --- no-encounter drop diagnostic (English build only, to avoid double-printing) ---

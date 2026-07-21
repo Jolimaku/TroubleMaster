@@ -75,7 +75,13 @@ against, see [`DATAMINING.md` → How the data is stored](DATAMINING.md#how-the-
 | `mastery_sets.json` / `.csv` / `.md` | 611 sets with components + bonus text |
 | `items.json` / `items.csv` | every obtainable item (~1,460) with stats, identify-suffix pools, and flat acquisition `sources` (from `extract_items.py`); CSV is equippable gear only |
 | `web/data.js` | denormalized data for the interactive page (named masteries only), plus the Board Builder tables (`jobs`, `pcs`, `espSlots`, `boardMods`, `slotUnlock`). Its `generated` field is the **data-extraction date** (modtime of the unpacked `Mastery.xml`, via `source_date()`), *not* the build date — so rebuilding an unchanged snapshot yields no diff; it only advances when the game is re-unpacked. |
-| `web/items.js` | denormalized item data for the Items tab (`window.TS_ITEMS`) — items with sources grouped by channel (drops resolved to missions), plus the `suffix_pools` / `suffixes` / `shops` / `stat_meta` lookups |
+| `web/items.js` | denormalized item data for the Items tab (`window.TS_ITEMS`) — items with sources grouped by channel (drops resolved to missions), plus the `suffix_pools` / `suffixes` / `shops` / `stat_meta` lookups. `generated` is the extraction date too (modtime of `Item.xml`, via `source_date()`). |
+
+Both `web/data.js` and `web/items.js` are written by `dump_web_json()` with **one top-level record
+per line** (each mastery / set / item / buff on its own line, values still compact) — `git diff`
+shows per-record changes instead of one multi-MB line, at ~0.1 % size cost. Internal newlines don't
+affect loading (the browser parses the embedded JSON; the `jq -Rs … fromjson` helper reads the whole
+file as one string).
 
 ## Interactive webpage (`web/`)
 

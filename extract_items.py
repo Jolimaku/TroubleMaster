@@ -32,7 +32,7 @@ import datetime
 import collections
 import xml.etree.ElementTree as ET
 
-from extract_masteries import Dictionary, idspace, is_developing, joint_training_teams
+from extract_masteries import Dictionary, idspace, is_developing, joint_training_teams, source_date, dump_web_json
 from missions import build_enemy_missions, collapse_enemy_encounters
 from resolve_desc import resolve_description
 
@@ -522,7 +522,7 @@ def main():
                     pc_weapon_types.add(w.strip())
 
     out = {
-        "generated": datetime.date.today().isoformat(),
+        "generated": source_date(xml, "Item.xml"),
         "items": items,
         "types": type_meta,
         "ranks": rank_meta,
@@ -608,7 +608,9 @@ def main():
     web_name = "items.js" if a.lang == "eng" else f"items.{a.lang}.js"
     web_path = os.path.join(os.path.dirname(__file__), "web", web_name)
     with open(web_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("window.TS_ITEMS = " + json.dumps(web, ensure_ascii=False, separators=(",", ":")) + ";")
+        f.write("window.TS_ITEMS = ")
+        dump_web_json(f, web)
+        f.write(";\n")
 
     # quick-inspection CSV (equippable gear only, one row per item)
     equip = [it for it in items if it["category"] in ("Weapon", "Armor", "Accessory")]

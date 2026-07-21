@@ -3135,7 +3135,7 @@
       // still-incomplete sets only (a fully-matched set drops out into the panel); each carries its
       // matched/missing counts so we can sort closest-to-complete first.
       const items = DATA.sets
-        .filter(s => types.has(s.type)
+        .filter(s => types.has(s.typeRaw)
           && s.components.some(c => bldAccessible(masteryById[c.id], types))
           && (!q || s._blob.includes(q)))
         .map(s => {

@@ -487,6 +487,12 @@ reverse-engineered mechanics — see TODO "Mine the in-game Help texts". Not min
     display `Heating`/`Genetics`/… only differs from the id for a handful of types, which is why
     matching on display names silently worked for PCs/beasts but broke for drones). Accordingly
     `pcs[].pcType`, `jobs[].accessTypes`, and `beasts[].pcType` are emitted as **raw ids**.
+    **Mastery sets** (`sets[]`) carry the same split: `type` (localized display, e.g.
+    `Great Swordsman`) **and** `typeRaw` (raw id, e.g. `Greatswordsman`, from `MasterySet.xml`'s
+    `Type`). The builder's Sets sidebar gates on `types.has(s.typeRaw)` — gating on the display
+    `type` silently worked for classes whose display == id (Fighter, Gunman, …) but hid every set
+    whose names differ (Great Swordsman, Battle Mage, Grenadier→`GrenadeThrower`,
+    Magic Knight→`Swordmagician`, White Knight/Mage, …), the same display-vs-id trap as drones.
     A job's `accessTypes` is the **prereq closure** (job + all recursive `RequireClassLv` classes),
     so an advanced class already carries its basic class(es) — e.g. Martial Artist →
     `[Dancer, Fighter, MartialArtist]`, Sniper → `[Gunman, Sniper]`. This is why there is **no
